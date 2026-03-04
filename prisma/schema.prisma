@@ -1,0 +1,291 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── 팀원 ──────────────────────────────────────────────────────
+
+model Member {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  color        String       @default("#6366f1") // 아바타 색상
+  slackUserId  String?      @map("slack_user_id")
+  authUserId   String?      @map("auth_user_id") // Phase Auth 때 채움
+  status       MemberStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  projectMembers   ProjectMember[]
+  assignedIssues   Issue[]           @relation("IssueAssignee")
+  disciplineWorks  DisciplineWork[]
+  activityLogs     ActivityLog[]
+  notifications    Notification[]
+
+  @@map("members")
+}
+
+enum MemberStatus {
+  ACTIVE
+  PENDING
+}
+
+// ─── 프로젝트 ──────────────────────────────────────────────────
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  slackWebhook String? @map("slack_webhook") // MVP: 채널 Webhook URL
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  members      ProjectMember[]
+  boardStatuses BoardStatus[]
+  disciplines  Discipline[]
+  sprints      Sprint[]
+  issues       Issue[]
+  labels       Label[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId String      @map("project_id")
+  memberId  String      @map("member_id")
+  role      ProjectRole @default(MEMBER)
+  joinedAt  DateTime    @default(now()) @map("joined_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  member  Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, memberId])
+  @@map("project_members")
+}
+
+enum ProjectRole {
+  OWNER
+  MEMBER
+}
+
+// ─── 보드 상태 (커스텀) ────────────────────────────────────────
+
+model BoardStatus {
+  id        String  @id @default(cuid())
+  projectId String  @map("project_id")
+  name      String
+  color     String  @default("#6b7280")
+  order     Int     @default(0)
+  isFinal   Boolean @default(false) @map("is_final") // 완료 상태 여부
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues  Issue[]
+
+  @@map("board_statuses")
+}
+
+// ─── 직군 ──────────────────────────────────────────────────────
+
+model Discipline {
+  id        String @id @default(cuid())
+  projectId String @map("project_id")
+  name      String
+  color     String @default("#6366f1")
+  order     Int    @default(0)
+
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  disciplineWorks DisciplineWork[]
+
+  @@map("disciplines")
+}
+
+// ─── 스프린트 ──────────────────────────────────────────────────
+
+model Sprint {
+  id        String       @id @default(cuid())
+  projectId String       @map("project_id")
+  name      String
+  goal      String?
+  startDate DateTime?    @map("start_date")
+  endDate   DateTime?    @map("end_date")
+  status    SprintStatus @default(PLANNED)
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  issues  Issue[]
+
+  @@map("sprints")
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
+// ─── 이슈 ──────────────────────────────────────────────────────
+
+model Issue {
+  id             String     @id @default(cuid())
+  projectId      String     @map("project_id")
+  sprintId       String?    @map("sprint_id")
+  type           IssueType
+  parentId       String?    @map("parent_id")
+  title          String
+  description    String?
+  boardStatusId  String?    @map("board_status_id")
+  priority       Priority   @default(MEDIUM)
+  assigneeId     String?    @map("assignee_id")
+  reporterName   String?    @map("reporter_name")
+  labels         String[]   @default([])
+  dueDate        DateTime?  @map("due_date")
+  order          Int        @default(0)
+  epicColor      String?    @map("epic_color") // Epic 전용 색상
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprint      Sprint?      @relation(fields: [sprintId], references: [id])
+  boardStatus BoardStatus? @relation(fields: [boardStatusId], references: [id])
+  assignee    Member?      @relation("IssueAssignee", fields: [assigneeId], references: [id])
+  parent      Issue?       @relation("IssueChildren", fields: [parentId], references: [id])
+  children    Issue[]      @relation("IssueChildren")
+
+  disciplineWorks DisciplineWork[]
+  comments        Comment[]
+  attachments     Attachment[]
+  activityLogs    ActivityLog[]
+
+  @@map("issues")
+}
+
+enum IssueType {
+  EPIC
+  STORY
+  TASK
+}
+
+enum Priority {
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+}
+
+// ─── 직군 체크리스트 ────────────────────────────────────────────
+
+model DisciplineWork {
+  id           String          @id @default(cuid())
+  issueId      String          @map("issue_id")
+  disciplineId String          @map("discipline_id")
+  assigneeId   String?         @map("assignee_id")
+  status       DisciplineStatus @default(TODO)
+  notes        String?
+  order        Int             @default(0)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  issue      Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  discipline Discipline @relation(fields: [disciplineId], references: [id], onDelete: Cascade)
+  assignee   Member?    @relation(fields: [assigneeId], references: [id])
+
+  @@map("discipline_works")
+}
+
+enum DisciplineStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+// ─── 댓글 ──────────────────────────────────────────────────────
+
+model Comment {
+  id          String   @id @default(cuid())
+  issueId     String   @map("issue_id")
+  authorName  String   @map("author_name") // MVP: 이름만 저장
+  content     String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+// ─── 파일 첨부 ─────────────────────────────────────────────────
+
+model Attachment {
+  id        String   @id @default(cuid())
+  issueId   String   @map("issue_id")
+  fileUrl   String   @map("file_url")
+  fileName  String   @map("file_name")
+  fileSize  Int      @map("file_size")
+  mimeType  String?  @map("mime_type")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@map("attachments")
+}
+
+// ─── 레이블 ────────────────────────────────────────────────────
+
+model Label {
+  id        String @id @default(cuid())
+  projectId String @map("project_id")
+  name      String
+  color     String @default("#6b7280")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("labels")
+}
+
+// ─── 활동 로그 ─────────────────────────────────────────────────
+
+model ActivityLog {
+  id         String          @id @default(cuid())
+  issueId    String          @map("issue_id")
+  memberId   String?         @map("member_id") // MVP: nullable
+  actionType ActivityAction  @map("action_type")
+  oldValue   String?         @map("old_value")
+  newValue   String?         @map("new_value")
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  issue  Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  member Member? @relation(fields: [memberId], references: [id])
+
+  @@map("activity_logs")
+}
+
+enum ActivityAction {
+  STATUS_CHANGED
+  ASSIGNEE_CHANGED
+  DISCIPLINE_UPDATED
+  TITLE_CHANGED
+  SPRINT_ASSIGNED
+  COMMENT_ADDED
+  PRIORITY_CHANGED
+  DUE_DATE_CHANGED
+  LABEL_CHANGED
+  AUTO_COMPLETED
+}
+
+// ─── 알림 (Phase Auth 용 — MVP에서는 미사용) ─────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  memberId  String   @map("member_id")
+  type      String
+  issueId   String?  @map("issue_id")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
