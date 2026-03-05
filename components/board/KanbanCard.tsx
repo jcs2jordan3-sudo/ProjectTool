@@ -3,12 +3,11 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useRouter } from "next/navigation";
+import { CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PriorityIcon } from "@/components/shared/PriorityIcon";
 
 const DW_ICON: Record<string, string> = { DONE: "✅", IN_PROGRESS: "🔄", TODO: "⏳" };
-const PRIORITY_DOT: Record<string, string> = {
-  URGENT: "bg-red-500", HIGH: "bg-orange-400", MEDIUM: "bg-yellow-400", LOW: "bg-slate-300",
-};
 
 type DisciplineWork = {
   id: string;
@@ -48,8 +47,14 @@ export function KanbanCard({ issue, projectId, isDragOverlay, onIssueClick }: Pr
     transition,
   };
 
-  const isOverdue =
-    issue.dueDate && new Date(issue.dueDate) < new Date() ? true : false;
+  const now = new Date();
+  const dueDateObj = issue.dueDate ? new Date(issue.dueDate) : null;
+  const diffDays = dueDateObj
+    ? Math.ceil((dueDateObj.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  const isOverdue = diffDays !== null && diffDays < 0;
+  const isToday = diffDays !== null && diffDays === 0;
+  const isSoon = diffDays !== null && diffDays > 0 && diffDays <= 3;
 
   return (
     <div
@@ -111,10 +116,20 @@ export function KanbanCard({ issue, projectId, isDragOverlay, onIssueClick }: Pr
 
       {/* 하단: 우선순위 + 마감일 + 담당자 */}
       <div className="flex items-center gap-2 mt-1">
-        <span className={cn("w-2 h-2 rounded-full shrink-0", PRIORITY_DOT[issue.priority] ?? "bg-slate-300")} />
+        <PriorityIcon priority={issue.priority} size={12} />
 
         {issue.dueDate && (
-          <span className={cn("text-[10px]", isOverdue ? "text-red-500 font-medium" : "text-muted-foreground")}>
+          <span
+            className={cn(
+              "inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full",
+              isOverdue || isToday
+                ? "bg-red-100 text-red-600 font-medium"
+                : isSoon
+                ? "bg-orange-100 text-orange-600"
+                : "text-muted-foreground"
+            )}
+          >
+            <CalendarDays size={10} />
             {new Date(issue.dueDate).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}
           </span>
         )}
@@ -140,7 +155,6 @@ export function KanbanCard({ issue, projectId, isDragOverlay, onIssueClick }: Pr
 
 // 담당자가 지정된 직군만 카운트하여 진행도 바 표시
 function ProgressBar({ disciplineWorks }: { disciplineWorks: DisciplineWork[] }) {
-  const assigned = disciplineWorks.filter((dw) => dw.discipline); // all have discipline
   // For progress, we count all discipline works (assigned or not)
   const total = disciplineWorks.length;
   const done = disciplineWorks.filter((dw) => dw.status === "DONE").length;

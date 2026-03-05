@@ -79,11 +79,13 @@ function Column({
   }
 
   return (
-    <div className="flex flex-col w-72 shrink-0">
+    <div
+      className="flex flex-col w-72 shrink-0 rounded-lg border bg-background overflow-hidden"
+      style={{ borderTop: `3px solid ${status.color}` }}
+    >
       {/* 컬럼 헤더 */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: status.color }} />
           <span className="text-sm font-medium">{status.name}</span>
           <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
             {issues.length}
@@ -102,9 +104,10 @@ function Column({
       {/* 카드 목록 */}
       <div
         ref={setNodeRef}
-        className={`flex-1 min-h-24 space-y-2 rounded-lg p-1 transition-colors ${
-          isOver ? "bg-accent/40" : ""
-        }`}
+        className="flex-1 min-h-24 space-y-2 p-2 transition-colors"
+        style={{
+          backgroundColor: isOver ? status.color + "18" : status.color + "08",
+        }}
       >
         <SortableContext items={issues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           {issues.map((issue) => (

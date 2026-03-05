@@ -2,10 +2,11 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   Search, X, LayoutList, ChevronRight, MoreHorizontal, Pencil, Trash2,
 } from "lucide-react";
+import { PriorityIcon } from "@/components/shared/PriorityIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -135,12 +136,6 @@ function sortFlat(issues: Issue[], sort: string): Issue[] {
 
 // ─── Flat Row ────────────────────────────────────────────────────
 
-const PRIORITY_DOT: Record<string, string> = {
-  URGENT: "bg-red-500", HIGH: "bg-orange-400", MEDIUM: "bg-yellow-400", LOW: "bg-slate-300",
-};
-const PRIORITY_LABELS: Record<string, string> = {
-  URGENT: "긴급", HIGH: "높음", MEDIUM: "보통", LOW: "낮음",
-};
 const DW_ICON: Record<string, string> = { DONE: "✅", IN_PROGRESS: "🔄", TODO: "⏳" };
 const TYPE_STYLE: Record<string, string> = {
   EPIC: "bg-purple-100 text-purple-700",
@@ -214,8 +209,7 @@ function FlatRow({
         </div>
 
         <div className="w-4 shrink-0 flex justify-center">
-          <span className={cn("w-2 h-2 rounded-full", PRIORITY_DOT[issue.priority] ?? "bg-slate-300")}
-            title={PRIORITY_LABELS[issue.priority]} />
+          <PriorityIcon priority={issue.priority} size={14} />
         </div>
 
         <div className="w-16 shrink-0 text-right">
@@ -492,7 +486,7 @@ export function IssuesPageClient({ projectId, initialIssues, members, boardStatu
           </span>
           {search && (
             <Badge variant="secondary" className="text-xs">
-              "{search}"
+              &ldquo;{search}&rdquo;
             </Badge>
           )}
         </div>

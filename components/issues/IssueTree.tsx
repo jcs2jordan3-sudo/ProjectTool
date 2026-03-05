@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, ChevronDown, Plus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { PriorityIcon } from "@/components/shared/PriorityIcon";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +23,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { IssueFormDialog } from "./IssueFormDialog";
-import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 
 type IssueType = "EPIC" | "STORY" | "TASK";
@@ -59,17 +58,6 @@ type Props = {
   boardStatuses: BoardStatus[];
   onRefresh: () => void;
   hideAddButton?: boolean;
-};
-
-const PRIORITY_COLORS: Record<Priority, string> = {
-  URGENT: "text-red-500",
-  HIGH: "text-orange-500",
-  MEDIUM: "text-yellow-500",
-  LOW: "text-slate-400",
-};
-
-const PRIORITY_LABELS: Record<Priority, string> = {
-  URGENT: "긴급", HIGH: "높음", MEDIUM: "보통", LOW: "낮음",
 };
 
 const DW_ICON: Record<string, string> = {
@@ -180,8 +168,8 @@ function IssueRow({
         </div>
 
         {/* 우선순위 */}
-        <span className={cn("w-14 text-center text-[10px] shrink-0 font-medium", PRIORITY_COLORS[issue.priority])}>
-          {PRIORITY_LABELS[issue.priority]}
+        <span className="w-14 shrink-0 flex justify-center">
+          <PriorityIcon priority={issue.priority} size={14} showLabel />
         </span>
 
         {/* 담당자 아바타 */}

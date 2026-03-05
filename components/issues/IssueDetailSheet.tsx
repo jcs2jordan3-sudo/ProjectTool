@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { ExternalLink, Send, Clock, User, Loader2, X as XIcon } from "lucide-react";
+import { PriorityIcon } from "@/components/shared/PriorityIcon";
 import { useQueryClient } from "@tanstack/react-query";
 import { useIssueDetail } from "@/lib/hooks/use-issue-detail";
 import {
@@ -136,11 +137,15 @@ export function IssueDetailSheet({ projectId, issueId, onClose }: Props) {
       <SheetContent side="right" className="w-full sm:max-w-3xl overflow-y-auto p-0" showCloseButton={false}>
         {isLoading && (
           <div className="flex items-center justify-center h-full">
+            <SheetTitle className="sr-only">이슈 상세</SheetTitle>
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         )}
         {issue && (
           <SheetIssueContent projectId={projectId} issue={issue} onClose={onClose} />
+        )}
+        {!isLoading && !issue && (
+          <SheetTitle className="sr-only">이슈 상세</SheetTitle>
         )}
       </SheetContent>
     </Sheet>
@@ -206,7 +211,7 @@ function SheetIssueContent({ projectId, issue, onClose }: { projectId: string; i
       </SheetHeader>
 
       {/* 본문 */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
         {/* 사이드바 정보 (수평 배치) */}
         <div className="grid grid-cols-2 gap-3 text-sm">
           {/* 상태 */}
@@ -268,7 +273,12 @@ function SheetIssueContent({ projectId, issue, onClose }: { projectId: string; i
               </SelectTrigger>
               <SelectContent>
                 {(["URGENT", "HIGH", "MEDIUM", "LOW"] as const).map((p) => (
-                  <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>
+                  <SelectItem key={p} value={p}>
+                    <span className="flex items-center gap-1.5">
+                      <PriorityIcon priority={p} size={12} />
+                      {PRIORITY_LABELS[p]}
+                    </span>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

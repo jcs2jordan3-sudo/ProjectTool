@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ChevronRight, Send, Clock, User } from "lucide-react";
+import { PriorityIcon } from "@/components/shared/PriorityIcon";
 import { IssueFormDialog } from "./IssueFormDialog";
 import { AttachmentSection } from "./AttachmentSection";
 import {
@@ -133,7 +134,7 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
     : [];
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto">
+    <div className="flex-1 overflow-y-auto px-6 py-4 max-w-5xl mx-auto">
       {/* 브레드크럼 */}
       <div className="flex items-center gap-1 text-xs text-muted-foreground mb-4">
         <Link href={`/projects/${projectId}/issues`} className="hover:text-foreground">이슈</Link>
@@ -149,9 +150,9 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
         <span className="text-foreground">{issue.title}</span>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-3 gap-5">
         {/* 메인 컨텐츠 */}
-        <div className="col-span-2 space-y-6">
+        <div className="col-span-2 space-y-4">
           {/* 제목 */}
           <div>
             <div className="flex items-start gap-2">
@@ -370,7 +371,7 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
         </div>
 
         {/* 사이드바 */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           {/* 상태 */}
           {issue.type !== "EPIC" && (
             <div>
@@ -430,7 +431,12 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
               </SelectTrigger>
               <SelectContent>
                 {(["URGENT", "HIGH", "MEDIUM", "LOW"] as const).map((p) => (
-                  <SelectItem key={p} value={p}>{PRIORITY_LABELS[p]}</SelectItem>
+                  <SelectItem key={p} value={p}>
+                    <span className="flex items-center gap-1.5">
+                      <PriorityIcon priority={p} size={12} />
+                      {PRIORITY_LABELS[p]}
+                    </span>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
