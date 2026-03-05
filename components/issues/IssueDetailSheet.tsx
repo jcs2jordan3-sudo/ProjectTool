@@ -18,7 +18,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ExternalLink, Send, Clock, User, Loader2, X as XIcon } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ExternalLink, Send, Clock, User, Loader2, X as XIcon, Trash2 } from "lucide-react";
 import { PriorityIcon } from "@/components/shared/PriorityIcon";
 import { useQueryClient } from "@tanstack/react-query";
 import { useIssueDetail } from "@/lib/hooks/use-issue-detail";
@@ -28,6 +38,7 @@ import {
   useAddDisciplineWork,
   useUpdateDisciplineWork,
   useDeleteDisciplineWork,
+  useDeleteIssue,
 } from "@/lib/hooks/use-issue-detail";
 import { AttachmentSection } from "./AttachmentSection";
 
@@ -156,12 +167,14 @@ function SheetIssueContent({ projectId, issue, onClose }: { projectId: string; i
   const queryClient = useQueryClient();
   const [commentText, setCommentText] = useState("");
   const [commentAuthor, setCommentAuthor] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const updateIssueField = useUpdateIssueField(projectId, issue.id);
   const addComment = useAddComment(projectId, issue.id);
   const addDisciplineWork = useAddDisciplineWork(projectId, issue.id);
   const updateDisciplineWork = useUpdateDisciplineWork(projectId, issue.id);
   const deleteDisciplineWork = useDeleteDisciplineWork(projectId, issue.id);
+  const deleteIssue = useDeleteIssue(projectId, issue.id);
 
   const usedDisciplineIds = new Set(issue.disciplineWorks.map((dw) => dw.discipline.id));
   const availableDisciplines = issue.disciplines.filter((d) => !usedDisciplineIds.has(d.id));
@@ -199,6 +212,13 @@ function SheetIssueContent({ projectId, issue, onClose }: { projectId: string; i
             >
               <ExternalLink size={16} />
             </Link>
+            <button
+              onClick={() => setDeleteOpen(true)}
+              className="text-muted-foreground hover:text-red-500 transition-colors"
+              title="이슈 삭제"
+            >
+              <Trash2 size={16} />
+            </button>
             <button
               onClick={onClose}
               className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
@@ -285,15 +305,19 @@ function SheetIssueContent({ projectId, issue, onClose }: { projectId: string; i
           </div>
 
           {/* 마감일 */}
-          {issue.dueDate && (
-            <div>
-              <SectionLabel>마감일</SectionLabel>
-              <p className="text-xs mt-1 flex items-center gap-1">
-                <Clock size={12} />
-                {new Date(issue.dueDate).toLocaleDateString("ko-KR")}
-              </p>
-            </div>
-          )}
+          <div>
+            <SectionLabel>마감일</SectionLabel>
+            <input
+              type="date"
+              className="mt-1 h-8 w-full text-xs border rounded px-2 py-1"
+              value={issue.dueDate ? new Date(issue.dueDate).toISOString().split("T")[0] : ""}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateIssueField.mutate({ dueDate: val || null });
+              }}
+              disabled={updateIssueField.isPending}
+            />
+          </div>
 
           {/* 스프린트 */}
           {issue.sprint && (
@@ -521,6 +545,35 @@ function SheetIssueContent({ projectId, issue, onClose }: { projectId: string; i
           </div>
         )}
       </div>
+
+      {/* 삭제 확인 다이얼로그 */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>이슈를 삭제하시겠습니까?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &quot;{issue.title}&quot; 이슈가 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                deleteIssue.mutate(undefined, {
+                  onSuccess: () => {
+                    setDeleteOpen(false);
+                    onClose();
+                  },
+                });
+              }}
+              disabled={deleteIssue.isPending}
+            >
+              {deleteIssue.isPending ? "삭제 중..." : "삭제"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

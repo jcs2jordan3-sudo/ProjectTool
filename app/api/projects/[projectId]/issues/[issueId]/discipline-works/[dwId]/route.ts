@@ -26,32 +26,45 @@ export async function PATCH(request: Request, { params }: Params) {
       include: { discipline: true },
     });
 
-    // 직군 작업이 IN_PROGRESS로 변경 → "할 일" 상태의 이슈를 "진행 중"으로 자동 이동
+    // 직군 작업이 IN_PROGRESS로 변경 → 이슈를 "진행 중" 상태로 자동 이동
     if (data.status === "IN_PROGRESS") {
-      const issue = await db.issue.findUnique({ where: { id: issueId }, select: { boardStatusId: true } });
-      if (issue?.boardStatusId) {
+      const issue = await db.issue.findUnique({
+        where: { id: issueId },
+        select: { boardStatusId: true, boardStatus: { select: { order: true } } },
+      });
+
+      if (issue) {
         const firstStatus = await db.boardStatus.findFirst({
           where: { projectId },
           orderBy: { order: "asc" },
         });
-        // 첫 번째 상태(할 일)에 있을 때만 자동 이동
-        if (firstStatus && issue.boardStatusId === firstStatus.id) {
+
+        if (firstStatus) {
           const inProgressStatus = await db.boardStatus.findFirst({
             where: { projectId, order: { gt: firstStatus.order }, isFinal: false },
             orderBy: { order: "asc" },
           });
+
           if (inProgressStatus) {
-            await db.issue.update({
-              where: { id: issueId },
-              data: { boardStatusId: inProgressStatus.id },
-            });
-            await db.activityLog.create({
-              data: {
-                issueId,
-                actionType: "AUTO_COMPLETED",
-                newValue: `직군 진행 시작 → ${inProgressStatus.name}`,
-              },
-            });
+            // 보드 상태 없음 OR 현재 순서가 "진행 중"보다 앞에 있으면 자동 이동
+            const currentOrder = issue.boardStatus?.order;
+            const shouldMove =
+              !issue.boardStatusId ||
+              (currentOrder !== undefined && currentOrder < inProgressStatus.order);
+
+            if (shouldMove) {
+              await db.issue.update({
+                where: { id: issueId },
+                data: { boardStatusId: inProgressStatus.id },
+              });
+              await db.activityLog.create({
+                data: {
+                  issueId,
+                  actionType: "AUTO_COMPLETED",
+                  newValue: `직군 진행 시작 → ${inProgressStatus.name}`,
+                },
+              });
+            }
           }
         }
       }

@@ -184,8 +184,8 @@ function FlatRow({
         </span>
         <span className="flex-1 text-sm truncate">{issue.title}</span>
 
-        <div className="w-24 shrink-0 flex justify-center gap-0.5">
-          {issue.disciplineWorks.slice(0, 4).map((dw) => (
+        <div className="w-28 shrink-0 flex justify-center gap-0.5 overflow-hidden">
+          {issue.disciplineWorks.slice(0, 3).map((dw) => (
             <span
               key={dw.id}
               className="text-[10px] px-1 py-0.5 rounded"
@@ -195,6 +195,9 @@ function FlatRow({
               {dw.discipline.name[0]}{DW_ICON[dw.status]}
             </span>
           ))}
+          {issue.disciplineWorks.length > 3 && (
+            <span className="text-[10px] text-muted-foreground">+{issue.disciplineWorks.length - 3}</span>
+          )}
         </div>
 
         <div className="w-20 shrink-0 flex justify-center">
@@ -212,9 +215,9 @@ function FlatRow({
           <PriorityIcon priority={issue.priority} size={14} />
         </div>
 
-        <div className="w-16 shrink-0 text-right">
+        <div className="w-20 shrink-0 text-right">
           {issue.dueDate && (
-            <span className={cn("text-[10px]", new Date(issue.dueDate) < new Date() ? "text-red-500" : "text-muted-foreground")}>
+            <span className={cn("text-xs", new Date(issue.dueDate) < new Date() ? "text-red-500" : "text-muted-foreground")}>
               {new Date(issue.dueDate).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}
             </span>
           )}
@@ -508,10 +511,10 @@ export function IssuesPageClient({ projectId, initialIssues, members, boardStatu
           <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 text-xs text-muted-foreground font-medium">
             <span className="w-14 shrink-0">타입</span>
             <span className="flex-1">제목</span>
-            <span className="w-24 text-center shrink-0">직군</span>
+            <span className="w-28 text-center shrink-0">직군</span>
             <span className="w-20 text-center shrink-0">상태</span>
             <span className="w-4 shrink-0" />
-            <span className="w-16 text-right shrink-0">마감일</span>
+            <span className="w-20 text-right shrink-0">마감일</span>
             <span className="w-6 text-center shrink-0">담당</span>
             <span className="w-6 shrink-0" />
           </div>

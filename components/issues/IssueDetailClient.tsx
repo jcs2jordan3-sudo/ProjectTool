@@ -451,15 +451,16 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
           )}
 
           {/* 마감일 */}
-          {issue.dueDate && (
-            <div>
-              <Label className="text-xs text-muted-foreground">마감일</Label>
-              <p className="text-sm mt-1 flex items-center gap-1">
-                <Clock size={12} />
-                {new Date(issue.dueDate).toLocaleDateString("ko-KR")}
-              </p>
-            </div>
-          )}
+          <div>
+            <Label className="text-xs text-muted-foreground">마감일</Label>
+            <input
+              type="date"
+              className="mt-1 h-8 w-full text-sm border rounded px-2 py-1"
+              value={issue.dueDate ? new Date(issue.dueDate).toISOString().split("T")[0] : ""}
+              onChange={(e) => updateIssueField.mutate({ dueDate: e.target.value || null })}
+              disabled={updateIssueField.isPending}
+            />
+          </div>
 
           {/* 작성자 */}
           {issue.reporterName && (

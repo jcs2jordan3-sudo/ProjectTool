@@ -122,6 +122,26 @@ export function useUpdateDisciplineWork(projectId: string, issueId: string) {
   });
 }
 
+// ── useDeleteIssue ──────────────────────────────────────────
+// DELETE /api/projects/{projectId}/issues/{issueId}
+export function useDeleteIssue(projectId: string, issueId: string) {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
+  return useMutation({
+    mutationFn: () =>
+      apiFetch(`/api/projects/${projectId}/issues/${issueId}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      issueInvalidationKeys(projectId).forEach((key) =>
+        queryClient.invalidateQueries({ queryKey: key })
+      );
+      router.refresh();
+    },
+  });
+}
+
 // ── useDeleteDisciplineWork ───────────────────────────────────
 // DELETE /api/projects/{projectId}/issues/{issueId}/discipline-works/{dwId}
 export function useDeleteDisciplineWork(projectId: string, issueId: string) {

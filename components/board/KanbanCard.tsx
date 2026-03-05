@@ -1,11 +1,29 @@
 "use client";
 
+import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useRouter } from "next/navigation";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, MoreHorizontal, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PriorityIcon } from "@/components/shared/PriorityIcon";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useDeleteIssue } from "@/lib/hooks/use-issue-detail";
 
 const DW_ICON: Record<string, string> = { DONE: "✅", IN_PROGRESS: "🔄", TODO: "⏳" };
 
@@ -39,6 +57,8 @@ type Props = {
 
 export function KanbanCard({ issue, projectId, isDragOverlay, onIssueClick }: Props) {
   const router = useRouter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const deleteIssue = useDeleteIssue(projectId, issue.id);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: issue.id, data: { issue } });
 
@@ -114,7 +134,7 @@ export function KanbanCard({ issue, projectId, isDragOverlay, onIssueClick }: Pr
         </div>
       )}
 
-      {/* 하단: 우선순위 + 마감일 + 담당자 */}
+      {/* 하단: 우선순위 + 마감일 + 담당자 + 메뉴 */}
       <div className="flex items-center gap-2 mt-1">
         <PriorityIcon priority={issue.priority} size={12} />
 
@@ -147,8 +167,49 @@ export function KanbanCard({ issue, projectId, isDragOverlay, onIssueClick }: Pr
               {issue.assignee.name[0]}
             </div>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal size={14} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem
+                className="text-red-600 focus:text-red-600"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 size={14} className="mr-2" />
+                삭제
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
+
+      {/* 삭제 확인 */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>이슈를 삭제하시겠습니까?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &quot;{issue.title}&quot; 이슈가 영구적으로 삭제됩니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => deleteIssue.mutate()}
+              disabled={deleteIssue.isPending}
+            >
+              {deleteIssue.isPending ? "삭제 중..." : "삭제"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
