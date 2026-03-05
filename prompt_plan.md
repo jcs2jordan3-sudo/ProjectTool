@@ -1,12 +1,12 @@
-# 구현 계획: UI 버그 수정 + 최적화 + 보드 필터 (5건)
+# 구현 계획: UI 버그 수정 + 최적화 + 보드 필터 (5건) — ✅ 완료
 
 ## 요구사항 정리
 
-1. **이슈 생성 시 상위 작업 선택 불가** — 보드에서 이슈 만들 때 상위 이슈를 선택할 수 없음
-2. **사이드바 X/전체보기 겹침** — IssueDetailSheet에서 Sheet 기본 X 버튼과 ExternalLink 아이콘이 겹침
-3. **이슈 목록 칼럼 정렬 안 맞음** — 트리/플랫 뷰 모두 헤더와 행의 칼럼 폭이 불일치
-4. **전체 UI 최적화** — 일관성, 간격, 가독성 개선
-5. **보드 필터 기능** — 칸반 보드에서 분류(타입)별, 담당자별 필터링
+1. ~~**이슈 생성 시 상위 작업 선택 불가**~~ ✅
+2. ~~**사이드바 X/전체보기 겹침**~~ ✅
+3. ~~**이슈 목록 칼럼 정렬 안 맞음**~~ ✅
+4. ~~**전체 UI 최적화**~~ ✅
+5. ~~**보드 필터 기능**~~ ✅
 
 ---
 
@@ -181,6 +181,22 @@ if (status === "IN_PROGRESS") {
 7. `npm run build` 0 errors
 
 ---
+
+---
+
+# 구현 계획: 보드 UI Jira 스타일 개선 (4 Phase) — ✅ 완료
+
+커밋: `e0910d6` (2026-03-05)
+
+## 완료 항목
+
+- [x] Phase 1: 칸반 컬럼 배경색 — 상단 색상 바 + 연한 배경 + 드래그 오버 강조
+- [x] Phase 2: 카드 마감일 pill 배지 — D-day 기반 빨강/주황/기본 3단계 (CalendarDays 아이콘)
+- [x] Phase 3: 우선순위 화살표 아이콘 — PriorityIcon 공통 컴포넌트 (ChevronsUp/ChevronUp/Minus/ChevronDown)
+  - 적용: KanbanCard, IssueTree, IssuesPageClient, IssueDetailSheet, IssueDetailClient
+- [x] Phase 4: 이슈 상세 빈 공백 축소 — max-w-5xl, padding/gap 조정
+- [x] 추가: IssueDetailSheet sr-only SheetTitle (접근성 경고 해결)
+- [x] 추가: next.config cpus 4→2 (Jest worker crash 방지)
 
 ## 이전 계획
 

@@ -42,7 +42,7 @@ app/(app)/projects/[projectId]/
   import/     # CSV/Excel Import
   settings/   # 보드상태·직군·멤버·알림 설정
 app/api/      # API Routes (Zod 입력 검증 필수)
-components/   # board/ issues/ sprint/ import/ disciplines/ settings/
+components/   # board/ issues/ sprint/ import/ disciplines/ settings/ shared/
 lib/          # db.ts · notifications.ts · import/ · validations/
 prisma/       # schema.prisma · migrations/
 ```
