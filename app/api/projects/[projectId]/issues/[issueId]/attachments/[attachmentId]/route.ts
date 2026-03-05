@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { supabase, STORAGE_BUCKET } from "@/lib/supabase";
+import { supabaseServer, STORAGE_BUCKET } from "@/lib/supabase-server";
 
 type Params = { params: Promise<{ projectId: string; issueId: string; attachmentId: string }> };
 
@@ -27,7 +27,7 @@ export async function DELETE(_req: Request, { params }: Params) {
       if (storagePath.includes("..") || storagePath.startsWith("/")) {
         return NextResponse.json({ error: "잘못된 파일 경로입니다." }, { status: 400 });
       }
-      await supabase.storage.from(STORAGE_BUCKET).remove([storagePath]);
+      await supabaseServer.storage.from(STORAGE_BUCKET).remove([storagePath]);
     }
 
     await db.attachment.delete({ where: { id: attachmentId } });

@@ -19,13 +19,24 @@ import {
 } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
 import { createPortal } from "react-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { KanbanCard, KanbanIssue } from "./KanbanCard";
 import { IssueFormDialog } from "@/components/issues/IssueFormDialog";
-import { Plus } from "lucide-react";
+import { IssueDetailSheet } from "@/components/issues/IssueDetailSheet";
+import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useReorderIssues, issueKeys } from "@/lib/hooks/use-issues";
 
 type BoardStatus = { id: string; name: string; color: string; isFinal: boolean; order: number };
 type Member = { id: string; name: string; color: string };
+type ParentOption = { id: string; title: string; type: "EPIC" | "STORY" | "TASK" };
 
 type Props = {
   projectId: string;
@@ -33,26 +44,39 @@ type Props = {
   initialIssues: KanbanIssue[];
   members: Member[];
   allStatuses: BoardStatus[];
+  parentOptions: ParentOption[];
 };
 
-// 컬럼 드롭 영역
+// ---------------------------------------------------------------------------
+// Column
+// ---------------------------------------------------------------------------
+
 function Column({
   status,
   issues,
   projectId,
   members,
   allStatuses,
+  parentOptions,
   onIssueAdded,
+  onIssueClick,
 }: {
   status: BoardStatus;
   issues: KanbanIssue[];
   projectId: string;
   members: Member[];
   allStatuses: BoardStatus[];
+  parentOptions: ParentOption[];
   onIssueAdded: () => void;
+  onIssueClick: (issueId: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status.id });
   const [addOpen, setAddOpen] = useState(false);
+
+  function handleSuccess() {
+    setAddOpen(false);
+    onIssueAdded();
+  }
 
   return (
     <div className="flex flex-col w-72 shrink-0">
@@ -84,7 +108,7 @@ function Column({
       >
         <SortableContext items={issues.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           {issues.map((issue) => (
-            <KanbanCard key={issue.id} issue={issue} projectId={projectId} />
+            <KanbanCard key={issue.id} issue={issue} projectId={projectId} onIssueClick={onIssueClick} />
           ))}
         </SortableContext>
         {issues.length === 0 && (
@@ -103,35 +127,44 @@ function Column({
           defaultType="TASK"
           members={members}
           boardStatuses={allStatuses}
-          parentOptions={[]}
+          parentOptions={parentOptions}
           initial={{ boardStatusId: status.id }}
-          onSuccess={onIssueAdded}
+          onSuccess={handleSuccess}
         />
       )}
     </div>
   );
 }
 
-export function KanbanBoard({ projectId, statuses, initialIssues, members, allStatuses }: Props) {
+// ---------------------------------------------------------------------------
+// KanbanBoard
+// ---------------------------------------------------------------------------
+
+export function KanbanBoard({ projectId, statuses, initialIssues, members, allStatuses, parentOptions }: Props) {
+  const queryClient = useQueryClient();
+  const reorderMutation = useReorderIssues(projectId);
+
   // 컬럼별 이슈 맵: statusId → issues[]
-  const [columns, setColumns] = useState<Record<string, KanbanIssue[]>>(() => {
-    const map: Record<string, KanbanIssue[]> = {};
-    for (const s of statuses) map[s.id] = [];
-    // null boardStatusId는 첫 컬럼에
-    const first = statuses[0]?.id;
-    for (const issue of initialIssues) {
-      const key = issue.boardStatusId ?? first;
-      if (key && map[key]) map[key].push(issue);
-      else if (first) map[first].push(issue);
-    }
-    // 각 컬럼 order 정렬
-    for (const key of Object.keys(map)) {
-      map[key].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    }
-    return map;
-  });
+  const [columns, setColumns] = useState<Record<string, KanbanIssue[]>>(() =>
+    buildInitialColumns(statuses, initialIssues)
+  );
 
   const [activeIssue, setActiveIssue] = useState<KanbanIssue | null>(null);
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+
+  // 필터
+  const [filterType, setFilterType] = useState("");
+  const [filterAssignee, setFilterAssignee] = useState("");
+  const hasActiveFilter = filterType || filterAssignee;
+
+  function filterIssues(issues: KanbanIssue[]): KanbanIssue[] {
+    return issues.filter((issue) => {
+      if (filterType && issue.type !== filterType) return false;
+      if (filterAssignee === "none" && issue.assignee) return false;
+      if (filterAssignee && filterAssignee !== "none" && issue.assignee?.id !== filterAssignee) return false;
+      return true;
+    });
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -154,7 +187,6 @@ export function KanbanBoard({ projectId, statuses, initialIssues, members, allSt
     if (!over) return;
 
     const activeColId = findColumn(active.id as string);
-    // over가 컬럼 id인지 카드 id인지 확인
     const overColId =
       columns[over.id as string] !== undefined
         ? (over.id as string)
@@ -176,7 +208,7 @@ export function KanbanBoard({ projectId, statuses, initialIssues, members, allSt
   }
 
   const handleDragEnd = useCallback(
-    async (event: DragEndEvent) => {
+    (event: DragEndEvent) => {
       const { active, over } = event;
       setActiveIssue(null);
       if (!over) return;
@@ -197,71 +229,146 @@ export function KanbanBoard({ projectId, statuses, initialIssues, members, allSt
         if (oldIdx === newIdx) return;
 
         const newOrder = arrayMove(items, oldIdx, newIdx);
+        // 낙관적 업데이트: 즉시 UI 반영
         setColumns((prev) => ({ ...prev, [activeColId]: newOrder }));
 
-        await fetch(`/api/projects/${projectId}/issues/reorder`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            issueId: active.id,
-            boardStatusId: activeColId,
-            orderedIds: newOrder.map((i) => i.id),
-          }),
+        reorderMutation.mutate({
+          issueId: active.id as string,
+          boardStatusId: activeColId,
+          orderedIds: newOrder.map((i) => i.id),
         });
       } else {
         // 다른 컬럼으로 이동 (handleDragOver에서 이미 UI 업데이트됨)
         const newColItems = columns[overColId];
-        await fetch(`/api/projects/${projectId}/issues/reorder`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            issueId: active.id,
-            boardStatusId: overColId,
-            orderedIds: newColItems.map((i) => i.id),
-          }),
+        reorderMutation.mutate({
+          issueId: active.id as string,
+          boardStatusId: overColId,
+          orderedIds: newColItems.map((i) => i.id),
         });
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [columns, projectId]
+    [columns, projectId, reorderMutation]
   );
 
+  // 이슈 추가 성공 시 서버 데이터를 다시 가져온다.
   function handleIssueAdded() {
-    // 서버에서 최신 데이터 다시 로드 (간단하게 새로고침)
-    window.location.reload();
+    queryClient.invalidateQueries({ queryKey: issueKeys.kanban(projectId) });
+    queryClient.invalidateQueries({ queryKey: issueKeys.all(projectId) });
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex gap-4 h-full overflow-x-auto pb-4">
-        {statuses.map((status) => (
-          <Column
-            key={status.id}
-            status={status}
-            issues={columns[status.id] ?? []}
-            projectId={projectId}
-            members={members}
-            allStatuses={allStatuses}
-            onIssueAdded={handleIssueAdded}
-          />
-        ))}
+    <div className="flex flex-col h-full gap-3">
+      {/* 필터 바 */}
+      <div className="flex items-center gap-2 shrink-0">
+        <Select value={filterType || "all"} onValueChange={(v) => setFilterType(v === "all" ? "" : v)}>
+          <SelectTrigger className="h-8 w-28 text-xs">
+            <SelectValue placeholder="분류" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">모든 분류</SelectItem>
+            <SelectItem value="STORY">STORY</SelectItem>
+            <SelectItem value="TASK">TASK</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={filterAssignee || "all"} onValueChange={(v) => setFilterAssignee(v === "all" ? "" : v)}>
+          <SelectTrigger className="h-8 w-28 text-xs">
+            <SelectValue placeholder="담당자" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">모든 담당자</SelectItem>
+            <SelectItem value="none">미배정</SelectItem>
+            {members.map((m) => (
+              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {hasActiveFilter && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs text-muted-foreground"
+            onClick={() => { setFilterType(""); setFilterAssignee(""); }}
+          >
+            <X size={12} className="mr-1" />
+            초기화
+          </Button>
+        )}
       </div>
 
-      {typeof document !== "undefined" &&
-        createPortal(
-          <DragOverlay>
-            {activeIssue ? (
-              <KanbanCard issue={activeIssue} projectId={projectId} isDragOverlay />
-            ) : null}
-          </DragOverlay>,
-          document.body
-        )}
-    </DndContext>
+      {/* 칸반 보드 */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex gap-4 flex-1 overflow-x-auto pb-4">
+          {statuses.map((status) => {
+            const filtered = filterIssues(columns[status.id] ?? []);
+            return (
+              <Column
+                key={status.id}
+                status={status}
+                issues={filtered}
+                projectId={projectId}
+                members={members}
+                allStatuses={allStatuses}
+                parentOptions={parentOptions}
+                onIssueAdded={handleIssueAdded}
+                onIssueClick={setSelectedIssueId}
+              />
+            );
+          })}
+        </div>
+
+        {typeof document !== "undefined" &&
+          createPortal(
+            <DragOverlay>
+              {activeIssue ? (
+                <KanbanCard issue={activeIssue} projectId={projectId} isDragOverlay />
+              ) : null}
+            </DragOverlay>,
+            document.body
+          )}
+
+        <IssueDetailSheet
+          projectId={projectId}
+          issueId={selectedIssueId}
+          onClose={() => setSelectedIssueId(null)}
+        />
+      </DndContext>
+    </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function buildInitialColumns(
+  statuses: { id: string }[],
+  issues: KanbanIssue[]
+): Record<string, KanbanIssue[]> {
+  const map: Record<string, KanbanIssue[]> = {};
+  for (const s of statuses) map[s.id] = [];
+
+  const first = statuses[0]?.id;
+  for (const issue of issues) {
+    const key = issue.boardStatusId ?? first;
+    if (key && map[key]) {
+      map[key].push(issue);
+    } else if (first) {
+      map[first].push(issue);
+    }
+  }
+
+  for (const key of Object.keys(map)) {
+    map[key].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+
+  return map;
 }

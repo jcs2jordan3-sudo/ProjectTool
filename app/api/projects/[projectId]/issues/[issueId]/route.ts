@@ -9,39 +9,55 @@ type Params = { params: Promise<{ projectId: string; issueId: string }> };
 
 export async function GET(_req: Request, { params }: Params) {
   try {
-    const { issueId } = await params;
-    const issue = await db.issue.findUnique({
-      where: { id: issueId },
-      include: {
-        assignee: { select: { id: true, name: true, color: true } },
-        boardStatus: true,
-        parent: { select: { id: true, title: true, type: true, epicColor: true } },
-        children: {
-          include: {
-            assignee: { select: { id: true, name: true, color: true } },
-            boardStatus: { select: { id: true, name: true, color: true, isFinal: true } },
+    const { projectId, issueId } = await params;
+
+    const [issue, disciplines, projectMembers, boardStatuses] = await Promise.all([
+      db.issue.findUnique({
+        where: { id: issueId },
+        include: {
+          assignee: { select: { id: true, name: true, color: true } },
+          boardStatus: true,
+          parent: { select: { id: true, title: true, type: true, epicColor: true } },
+          children: {
+            include: {
+              assignee: { select: { id: true, name: true, color: true } },
+              boardStatus: { select: { id: true, name: true, color: true, isFinal: true } },
+            },
+            orderBy: { order: "asc" },
           },
-          orderBy: { order: "asc" },
-        },
-        disciplineWorks: {
-          include: {
-            discipline: true,
-            assignee: { select: { id: true, name: true, color: true } },
+          disciplineWorks: {
+            include: {
+              discipline: true,
+              assignee: { select: { id: true, name: true, color: true } },
+            },
+            orderBy: { order: "asc" },
           },
-          orderBy: { order: "asc" },
+          comments: { orderBy: { createdAt: "asc" } },
+          attachments: { orderBy: { createdAt: "desc" } },
+          activityLogs: {
+            include: { member: { select: { id: true, name: true } } },
+            orderBy: { createdAt: "desc" },
+            take: 50,
+          },
+          sprint: { select: { id: true, name: true } },
         },
-        comments: { orderBy: { createdAt: "asc" } },
-        attachments: { orderBy: { createdAt: "desc" } },
-        activityLogs: {
-          include: { member: { select: { id: true, name: true } } },
-          orderBy: { createdAt: "desc" },
-          take: 50,
-        },
-        sprint: { select: { id: true, name: true } },
-      },
-    });
+      }),
+      db.discipline.findMany({ where: { projectId }, orderBy: { order: "asc" } }),
+      db.projectMember.findMany({
+        where: { projectId },
+        include: { member: { select: { id: true, name: true, color: true } } },
+      }),
+      db.boardStatus.findMany({ where: { projectId }, orderBy: { order: "asc" } }),
+    ]);
+
     if (!issue) return NextResponse.json({ error: "이슈를 찾을 수 없습니다." }, { status: 404 });
-    return NextResponse.json(issue);
+
+    return NextResponse.json({
+      ...issue,
+      disciplines,
+      members: projectMembers.map((pm) => pm.member),
+      boardStatuses,
+    });
   } catch {
     return NextResponse.json({ error: "이슈를 불러오지 못했습니다." }, { status: 500 });
   }

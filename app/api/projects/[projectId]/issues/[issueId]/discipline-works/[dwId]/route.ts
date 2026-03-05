@@ -12,7 +12,7 @@ const schema = z.object({
 
 export async function PATCH(request: Request, { params }: Params) {
   try {
-    const { issueId, dwId } = await params;
+    const { projectId, issueId, dwId } = await params;
     const body = await request.json();
     const data = schema.parse(body);
 
@@ -26,10 +26,43 @@ export async function PATCH(request: Request, { params }: Params) {
       include: { discipline: true },
     });
 
-    // 모든 직군 DONE → 이슈 자동 완료
+    // 직군 작업이 IN_PROGRESS로 변경 → "할 일" 상태의 이슈를 "진행 중"으로 자동 이동
+    if (data.status === "IN_PROGRESS") {
+      const issue = await db.issue.findUnique({ where: { id: issueId }, select: { boardStatusId: true } });
+      if (issue?.boardStatusId) {
+        const firstStatus = await db.boardStatus.findFirst({
+          where: { projectId },
+          orderBy: { order: "asc" },
+        });
+        // 첫 번째 상태(할 일)에 있을 때만 자동 이동
+        if (firstStatus && issue.boardStatusId === firstStatus.id) {
+          const inProgressStatus = await db.boardStatus.findFirst({
+            where: { projectId, order: { gt: firstStatus.order }, isFinal: false },
+            orderBy: { order: "asc" },
+          });
+          if (inProgressStatus) {
+            await db.issue.update({
+              where: { id: issueId },
+              data: { boardStatusId: inProgressStatus.id },
+            });
+            await db.activityLog.create({
+              data: {
+                issueId,
+                actionType: "AUTO_COMPLETED",
+                newValue: `직군 진행 시작 → ${inProgressStatus.name}`,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    // 담당자가 지정된 직군 작업이 모두 DONE → 이슈 자동 완료
+    // 담당자가 없는 직군 작업은 무시 (불필요한 직군으로 간주)
     if (data.status === "DONE") {
       const allWorks = await db.disciplineWork.findMany({ where: { issueId } });
-      const allDone = allWorks.every((w) => w.status === "DONE");
+      const assignedWorks = allWorks.filter((w) => w.assigneeId !== null);
+      const allDone = assignedWorks.length > 0 && assignedWorks.every((w) => w.status === "DONE");
 
       if (allDone) {
         const finalStatus = await db.boardStatus.findFirst({

@@ -8,6 +8,8 @@ import {
   Settings,
   ChevronRight,
   ChevronDown,
+  Menu,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -46,9 +48,11 @@ const bottomNavItems: NavItem[] = [
 function NavLink({
   item,
   depth = 0,
+  onNavigate,
 }: {
   item: NavItem;
   depth?: number;
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
@@ -78,6 +82,7 @@ function NavLink({
               <Link
                 key={child.href}
                 href={child.href}
+                onClick={onNavigate}
                 className={cn(
                   "block rounded-md px-3 py-1.5 text-sm transition-colors",
                   pathname === child.href
@@ -97,6 +102,7 @@ function NavLink({
   return (
     <Link
       href={item.href}
+      onClick={onNavigate}
       className={cn(
         "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
         isActive
@@ -110,12 +116,12 @@ function NavLink({
   );
 }
 
-export function Sidebar() {
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
-    <aside className="flex h-full w-56 flex-col border-r bg-background">
+    <>
       {/* 로고 */}
       <div className="flex h-14 items-center border-b px-4">
-        <Link href="/projects" className="flex items-center gap-2">
+        <Link href="/projects" className="flex items-center gap-2" onClick={onNavigate}>
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">
             W
           </div>
@@ -126,16 +132,80 @@ export function Sidebar() {
       {/* 상단 네비게이션 */}
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
         {topNavItems.map((item) => (
-          <NavLink key={item.href} item={item} />
+          <NavLink key={item.href} item={item} onNavigate={onNavigate} />
         ))}
       </nav>
 
       {/* 하단 네비게이션 */}
       <div className="space-y-1 border-t p-2">
         {bottomNavItems.map((item) => (
-          <NavLink key={item.href} item={item} />
+          <NavLink key={item.href} item={item} onNavigate={onNavigate} />
         ))}
       </div>
-    </aside>
+    </>
+  );
+}
+
+export function MobileMenuButton({
+  onClick,
+}: {
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label="메뉴 열기"
+      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground md:hidden"
+    >
+      <Menu size={18} />
+    </button>
+  );
+}
+
+export function Sidebar() {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  return (
+    <>
+      {/* 데스크탑 사이드바 */}
+      <aside className="hidden md:flex h-full w-56 flex-col border-r bg-background">
+        <SidebarContent />
+      </aside>
+
+      {/* 모바일 햄버거 버튼 — Header에서 렌더링하도록 export */}
+      {/* 모바일 오버레이 */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* 모바일 드로어 */}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex h-full w-64 flex-col border-r bg-background transition-transform duration-200 md:hidden",
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <button
+          onClick={() => setMobileOpen(false)}
+          aria-label="메뉴 닫기"
+          className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          <X size={18} />
+        </button>
+        <SidebarContent onNavigate={() => setMobileOpen(false)} />
+      </aside>
+
+      {/* 모바일 토글 버튼 — 레이아웃에서 포지셔닝 */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        aria-label="메뉴 열기"
+        className="fixed bottom-4 left-4 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md md:hidden"
+      >
+        <Menu size={18} />
+      </button>
+    </>
   );
 }

@@ -37,8 +37,8 @@ export async function sendSlackNotification(payload: NotifyPayload): Promise<voi
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ blocks }),
     });
-  } catch {
-    // 알림은 부가 기능 — 실패해도 메인 흐름에 영향 없음
+  } catch (err) {
+    console.error("Slack 알림 발송 실패:", err);
   }
 }
 

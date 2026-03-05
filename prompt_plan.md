@@ -1,96 +1,187 @@
-# Webserive - 경량 프로젝트 관리 툴 구현 계획
+# 구현 계획: UI 버그 수정 + 최적화 + 보드 필터 (5건)
 
-> Jira의 핵심 기능만 추려 빠르고 직관적인 사내 프로젝트 관리 도구
+## 요구사항 정리
 
-## 기술 스택
+1. **이슈 생성 시 상위 작업 선택 불가** — 보드에서 이슈 만들 때 상위 이슈를 선택할 수 없음
+2. **사이드바 X/전체보기 겹침** — IssueDetailSheet에서 Sheet 기본 X 버튼과 ExternalLink 아이콘이 겹침
+3. **이슈 목록 칼럼 정렬 안 맞음** — 트리/플랫 뷰 모두 헤더와 행의 칼럼 폭이 불일치
+4. **전체 UI 최적화** — 일관성, 간격, 가독성 개선
+5. **보드 필터 기능** — 칸반 보드에서 분류(타입)별, 담당자별 필터링
 
-| 계층 | 기술 |
-|------|------|
-| 프레임워크 | Next.js 16 (App Router) |
-| 언어 | TypeScript |
-| UI | Tailwind CSS v4 + shadcn/ui |
-| DB | Supabase (PostgreSQL) + Prisma v7 |
-| 서버 상태 | TanStack React Query v5 |
-| 클라이언트 상태 | Zustand v5 |
-| 드래그 앤 드롭 | dnd-kit |
-| 검증 | Zod v4 |
-| Excel 파싱 | SheetJS (xlsx) |
-| 배포 | Vercel + Supabase 클라우드 |
+---
 
-## Phase 1: 프로젝트 셋업 ✅
-- [x] Next.js 프로젝트 생성 (TypeScript, Tailwind, App Router)
-- [x] shadcn/ui 컴포넌트 설치
-- [x] Supabase 프로젝트 생성 및 환경변수 설정
-- [x] Prisma 스키마 작성 및 마이그레이션
-- [x] 기본 레이아웃 (사이드바, 헤더) 구현
+## Phase 1: 이슈 생성 시 상위 작업 선택 가능하도록 수정
 
-## Phase 1.5: 팀원 관리 (인증 대체) ✅
-- [x] `/settings/members` 팀원 목록 페이지
-- [x] 팀원 추가/수정/삭제 (이름, 이메일, 색상, slack_user_id)
-- [x] 이슈 담당자 선택 시 팀원 목록 연동
+### 원인
+- `KanbanBoard.tsx`의 Column 컴포넌트가 `IssueFormDialog`에 `parentOptions={[]}`을 전달
+- 보드 페이지(`board/page.tsx`)에서 에픽/스토리 목록을 가져오지 않아 빈 배열
 
-## Phase 2: 인증 (Phase Auth로 이연)
-- [ ] Supabase Auth (이메일/구글 SSO) — MVP 제외
-- [ ] 관리자 승인 기반 회원가입 — 추후 구현
+### 수정 파일
+| 파일 | 변경 내용 |
+|------|----------|
+| `app/(app)/projects/[projectId]/board/page.tsx` | 에픽/스토리 이슈도 별도로 조회하여 parentOptions로 전달 |
+| `components/board/KanbanBoardWrapper.tsx` | parentOptions prop 추가 |
+| `components/board/KanbanBoard.tsx` | Props에 parentOptions 추가, Column에 전달 |
 
-## Phase 3: 프로젝트 & 이슈 CRUD ✅
-- [x] 프로젝트 생성/수정/삭제
-- [x] 멤버 초대 (이메일)
-- [x] 이슈 생성/수정/삭제 (type: EPIC / STORY / TASK)
-- [x] 이슈 상세 패널 — 부모 breadcrumb + 하위 이슈 목록
-- [x] Epic 색상 지정, Story→Epic 연결, Task→Story/Epic 연결
-- [x] 담당자, 우선순위, 레이블, 마감일 설정
-- [x] ActivityLog: 이슈 변경 이력 자동 기록
+### 구현
+- 보드 페이지에서 `EPIC`/`STORY` 타입 이슈를 DB에서 조회
+- `{ id, title, type }` 형태로 KanbanBoard → Column → IssueFormDialog에 전달
 
-## Phase 3.5: 커스텀 보드 상태 & 직군 설정 ✅
-- [x] 프로젝트 설정 > 보드 상태: 추가/수정/삭제/드래그 순서변경
-- [x] is_final 토글 (완료 상태 지정)
-- [x] 프로젝트 생성 시 기본 상태 4개 자동 생성
-- [x] 프로젝트 설정 > 직군: 추가/색상/삭제 (기획/개발/아트/애니메이션)
-- [x] Task 직군 체크리스트 (DisciplineWork): 모두 DONE → Task 자동 완료
+---
 
-## Phase 4: 칸반 보드 ✅
-- [x] dnd-kit으로 드래그 앤 드롭 칸반 구현
-- [x] 커스텀 상태 컬럼 (DB에서 BoardStatus 로드해 동적 렌더링)
-- [x] 낙관적 업데이트
-- [x] 칸반 카드에 직군 진행 배지 표시
-- [x] KanbanBoardWrapper (dynamic import, ssr: false)로 하이드레이션 방지
+## Phase 2: 사이드바 X/전체보기 버튼 겹침 해결
 
-## Phase 4.5: 스프린트 ✅
-- [x] Sprint CRUD (이름, 목표, 시작일, 종료일)
-- [x] 스프린트 시작/완료 액션
-- [x] 이슈 백로그 ↔ 스프린트 이동
-- [x] 스프린트 진행률 표시 (완료 이슈 / 전체 이슈)
-- [x] BacklogClient UI (ACTIVE 우선 표시)
+### 원인
+- `sheet.tsx`의 SheetContent가 `absolute top-4 right-4`에 X 버튼을 자동 렌더링
+- `IssueDetailSheet.tsx`의 헤더에서 ExternalLink 아이콘이 같은 위치에 배치
 
-## Phase 5: 리스트 뷰 & 검색 ✅
-- [x] 계층 트리 리스트 뷰 (Epic → Story → Task 접기/펼치기)
-- [x] 플랫 테이블 뷰 전환 토글
-- [x] 필터 (담당자, 상태, 우선순위, 타입)
-- [x] 정렬 (마감일, 생성일, 우선순위) — 플랫 뷰 전용
-- [x] 검색바 (제목 텍스트 검색)
+### 수정 파일
+| 파일 | 변경 내용 |
+|------|----------|
+| `components/issues/IssueDetailSheet.tsx` | SheetContent에 `showCloseButton={false}` 전달. 헤더에 X와 ExternalLink를 나란히 배치 |
 
-## Phase 6: 댓글 & 슬랙 알림 ✅
-- [x] 이슈 내 댓글 CRUD + @멘션
-- [x] Slack Incoming Webhook 알림 (담당자 변경, 상태 변경, 댓글)
-- [x] 프로젝트 설정 > 알림: Webhook URL 입력 + 테스트 발송
-- [ ] Supabase Realtime 실시간 댓글 — 추후 구현
+### 구현
+- Sheet 기본 X 버튼 비활성화 (`showCloseButton={false}`)
+- SheetHeader 우측에 `[전체보기 아이콘] [X 닫기 버튼]` 순서로 명시적 배치
+- 충분한 간격(gap-2)으로 분리
 
-## Phase 7: CSV/Excel Import ✅
-- [x] SheetJS(xlsx)로 .csv / .xlsx 파싱
-- [x] ImportClient: 파일 업로드 → 미리보기 → 결과 (3단계)
-- [x] parent_title 참조로 계층 구조 자동 생성 (Epic → Story → Task 순)
-- [x] 유효성 검사 + 오류 행 표시 (빨간 하이라이트)
-- [x] Import 템플릿 CSV 다운로드 버튼 (BOM 포함 한글 호환)
+---
 
-## Phase 8: 파일 첨부 ✅
-- [x] Supabase Storage 파일 업로드 (최대 20MB)
-- [x] 이미지 미리보기 + 파일 삭제
-- [x] 드래그 앤 드롭 업로드
-- [ ] Supabase Storage `attachments` 버킷 생성 필요 (수동, Public 버킷)
+## Phase 3: 이슈 목록 칼럼 정렬 맞춤
 
-## Phase Auth: 추후 구현
-- [ ] Supabase Auth 활성화 (이메일 로그인)
-- [ ] 관리자 승인 기반 회원가입 (PENDING → ACTIVE)
-- [ ] Slack Bot API 개인 DM 알림 전환
-- [ ] 이메일 알림 (Resend)
+### 원인
+- **플랫 뷰**: 헤더 칼럼 폭과 FlatRow의 아이템 폭이 불일치
+- **트리 뷰**: 헤더와 IssueRow의 아이템 폭 불일치
+
+### 수정 파일
+| 파일 | 변경 내용 |
+|------|----------|
+| `components/issues/IssuesPageClient.tsx` | 헤더와 FlatRow에 동일한 고정 너비 적용 |
+| `components/issues/IssueTree.tsx` | 헤더와 IssueRow에 동일한 고정 너비 적용 |
+
+### 구현 방식
+
+**플랫 뷰 통일 칼럼:**
+```
+타입(w-14) | 제목(flex-1) | 직군(w-24) | 상태(w-20) | 우선순위(w-4) | 마감일(w-16) | 담당자(w-6) | 액션(w-6)
+```
+
+**트리 뷰 통일 칼럼:**
+```
+확장+제목(flex-1, depth indent) | 직군(w-24) | 상태(w-20) | 우선순위(w-14) | 담당자(w-6) | 액션(w-6)
+```
+
+---
+
+## Phase 4: 전체 UI 최적화
+
+### 수정 파일
+| 파일 | 변경 내용 |
+|------|----------|
+| `components/issues/IssueDetailSheet.tsx` | Sheet 너비 확대, 패딩/간격 조정 |
+| `components/issues/IssuesPageClient.tsx` | hover 효과 일관화 |
+| `components/issues/IssueTree.tsx` | hover 효과, 행 높이 일관화 |
+
+---
+
+---
+
+## Phase 5: 보드 필터 기능 (분류별, 담당자별)
+
+### 현재 상태
+- 칸반 보드에 필터 UI 없음 → 모든 이슈가 무조건 표시됨
+- 이슈 탭에는 이미 필터 기능이 있으나 보드에는 없음
+
+### 수정 파일
+| 파일 | 변경 내용 |
+|------|----------|
+| `components/board/KanbanBoard.tsx` | 필터 상태(filterType, filterAssignee) + 필터 바 UI + 칼럼별 이슈 필터링 |
+
+### 구현
+- KanbanBoard 상단에 필터 바 추가 (DndContext 바깥, 보드 위쪽)
+- **분류 필터**: "모든 타입" / "STORY" / "TASK" (보드에 EPIC은 이미 제외)
+- **담당자 필터**: "모든 담당자" / "미배정" / 각 멤버 이름
+- 필터 적용 방식: `columns` 데이터를 렌더링 시 `.filter()`로 클라이언트 필터링
+  - 드래그앤드롭은 원본 columns 기준으로 유지 (필터는 뷰만 변경)
+  - 필터 초기화 버튼 포함
+- 필터 활성화 시 각 칼럼의 카운트도 필터된 수 표시
+
+---
+
+---
+
+## Phase 6: 카드 진행도 바 + 직군 진행 시 자동 상태 이동
+
+### 6-1. 칸반 카드에 진행도 바 추가
+
+**파일**: `components/board/KanbanCard.tsx`
+
+- disciplineWorks 데이터에서 진행도 계산:
+  - 담당자가 지정된 직군만 카운트 (미지정은 무시 — Phase 1 로직과 일관)
+  - `DONE 수 / 담당자 지정 총 수 * 100` = 퍼센트
+- 직군 배지 아래에 가로 프로그레스 바 렌더링
+  - 배경: `bg-muted`, 채움: `bg-primary` (진행도에 따라 width %)
+  - 우측에 `2/5` 형태 텍스트 표시
+  - 담당자 지정 직군이 0개면 바 미표시
+
+### 6-2. 직군 IN_PROGRESS 시 이슈 자동 "진행 중" 이동
+
+**파일**: `app/api/projects/[projectId]/issues/[issueId]/discipline-works/[dwId]/route.ts`
+
+현재: `status === "DONE"` 일 때만 자동 완료 로직 존재
+추가: `status === "IN_PROGRESS"` 일 때 이슈를 "진행 중" 상태로 자동 이동
+
+로직:
+```
+if (status === "IN_PROGRESS") {
+  // 현재 이슈의 보드 상태 확인
+  const issue = findUnique(issueId)
+  const currentStatus = findUnique(issue.boardStatusId)
+  // 첫 번째(order=0) 상태에 있을 때만 자동 이동 (이미 다른 곳이면 건드리지 않음)
+  const firstStatus = findFirst({ projectId, order 최소 })
+  if (issue.boardStatusId === firstStatus.id) {
+    // 두 번째 상태(진행 중)로 이동
+    const inProgressStatus = findFirst({ projectId, order > firstStatus.order, isFinal: false })
+    if (inProgressStatus) {
+      issue.update({ boardStatusId: inProgressStatus.id })
+      activityLog.create("AUTO_COMPLETED", "직군 진행 시작 → {statusName}")
+    }
+  }
+}
+```
+
+핵심 규칙:
+- **첫 번째 상태(할 일)에 있을 때만** 자동 이동 → 사용자가 수동으로 다른 상태에 둔 경우 건드리지 않음
+- `isFinal: false`인 두 번째 상태로 이동 (보통 "진행 중")
+- ActivityLog 기록
+
+---
+
+## 수정 파일 총 목록
+
+| 파일 | Phase |
+|------|-------|
+| `app/(app)/projects/[projectId]/board/page.tsx` | 1 |
+| `components/board/KanbanBoardWrapper.tsx` | 1 |
+| `components/board/KanbanBoard.tsx` | 1, 5 |
+| `components/issues/IssueDetailSheet.tsx` | 2, 4 |
+| `components/issues/IssuesPageClient.tsx` | 3, 4 |
+| `components/issues/IssueTree.tsx` | 3, 4 |
+| `components/board/KanbanCard.tsx` | 6 |
+| `app/api/.../discipline-works/[dwId]/route.ts` | 6 |
+
+## 검증 계획
+
+1. 보드에서 "+" → 이슈 만들기 → 상위 이슈 드롭다운에 에픽/스토리 표시 확인
+2. 보드 카드 클릭 → 사이드 시트 → X와 전체보기 아이콘 겹치지 않음 확인
+3. 이슈 탭 → 트리/플랫 모드 전환 → 헤더와 행 칼럼 정렬 일치 확인
+4. 보드 → 분류 필터 "TASK" 선택 → TASK만 표시 / 담당자 필터 → 해당 멤버 카드만 표시
+5. 칸반 카드에 진행도 바 표시 확인 (담당자 지정 직군 기준)
+6. 직군 작업을 IN_PROGRESS로 변경 → "할 일" 컬럼에 있던 이슈가 "진행 중"으로 자동 이동 확인
+7. `npm run build` 0 errors
+
+---
+
+## 이전 계획
+
+(이전 구현 계획은 이 문서에서 제거됨 — 직군 자동 생성 + 보드 사이드 시트 구현 완료)

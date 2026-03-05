@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { apiFetch, ApiError } from "@/lib/api";
 
 const EPIC_COLORS = [
   "#6366f1", "#8b5cf6", "#ec4899", "#ef4444",
@@ -60,6 +63,8 @@ export function IssueFormDialog({
   defaultParentId, members, boardStatuses, parentOptions,
   initial, onSuccess,
 }: Props) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const isEdit = Boolean(initial?.id);
   const [form, setForm] = useState<FormData>({
     type: initial?.type ?? defaultType,
@@ -74,7 +79,6 @@ export function IssueFormDialog({
     reporterName: initial?.reporterName ?? "",
   });
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const update = <K extends keyof FormData>(key: K, val: FormData[K]) =>
     setForm((prev) => ({ ...prev, [key]: val }));
@@ -85,10 +89,31 @@ export function IssueFormDialog({
     return false;
   });
 
-  async function handleSubmit(e: React.FormEvent) {
+  const mutation = useMutation({
+    mutationFn: (payload: Record<string, unknown>) => {
+      const url = isEdit
+        ? `/api/projects/${projectId}/issues/${initial!.id}`
+        : `/api/projects/${projectId}/issues`;
+      const method = isEdit ? "PATCH" : "POST";
+      return apiFetch(url, { method, body: JSON.stringify(payload) });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "issues"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "kanbanIssues"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "sprints"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "backlogIssues"] });
+      router.refresh();
+      onSuccess();
+      onOpenChange(false);
+    },
+    onError: (err) => {
+      setError(err instanceof ApiError ? err.message : "오류가 발생했습니다.");
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
     const payload = {
       type: form.type,
@@ -103,28 +128,7 @@ export function IssueFormDialog({
       reporterName: form.reporterName || null,
     };
 
-    try {
-      const url = isEdit
-        ? `/api/projects/${projectId}/issues/${initial!.id}`
-        : `/api/projects/${projectId}/issues`;
-      const method = isEdit ? "PATCH" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error ?? "오류가 발생했습니다.");
-        return;
-      }
-
-      onSuccess();
-      onOpenChange(false);
-    } finally {
-      setLoading(false);
-    }
+    mutation.mutate(payload);
   }
 
   return (
@@ -301,8 +305,8 @@ export function IssueFormDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               취소
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "저장 중..." : isEdit ? "수정" : "만들기"}
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? "저장 중..." : isEdit ? "수정" : "만들기"}
             </Button>
           </div>
         </form>

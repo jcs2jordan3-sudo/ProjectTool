@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -21,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProjectFormDialog } from "./ProjectFormDialog";
+import { useProjects, useDeleteProject } from "@/lib/hooks/use-projects";
 
 type Project = {
   id: string;
@@ -35,28 +37,22 @@ type Props = { initialProjects: Project[] };
 
 export function ProjectsClient({ initialProjects }: Props) {
   const router = useRouter();
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
+  const queryClient = useQueryClient();
+  const { data: projects = initialProjects } = useProjects(initialProjects);
+  const deleteProject = useDeleteProject();
+
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Project | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-
-  async function refresh() {
-    const res = await fetch("/api/projects");
-    if (res.ok) setProjects(await res.json());
-    router.refresh();
-  }
 
   async function handleDelete() {
     if (!deleteTarget) return;
-    setDeleteLoading(true);
-    try {
-      await fetch(`/api/projects/${deleteTarget.id}`, { method: "DELETE" });
-      setDeleteTarget(null);
-      await refresh();
-    } finally {
-      setDeleteLoading(false);
-    }
+    deleteProject.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        setDeleteTarget(null);
+        router.refresh();
+      },
+    });
   }
 
   return (
@@ -146,7 +142,10 @@ export function ProjectsClient({ initialProjects }: Props) {
       <ProjectFormDialog
         open={addOpen}
         onOpenChange={setAddOpen}
-        onSuccess={(id) => router.push(`/projects/${id}/issues`)}
+        onSuccess={(id) => {
+          queryClient.invalidateQueries({ queryKey: ["projects"] });
+          router.push(`/projects/${id}/issues`);
+        }}
       />
 
       {editTarget && (
@@ -154,7 +153,10 @@ export function ProjectsClient({ initialProjects }: Props) {
           open={Boolean(editTarget)}
           onOpenChange={(open) => !open && setEditTarget(null)}
           initial={{ id: editTarget.id, name: editTarget.name, description: editTarget.description ?? "" }}
-          onSuccess={() => { setEditTarget(null); refresh(); }}
+          onSuccess={() => {
+            setEditTarget(null);
+            queryClient.invalidateQueries({ queryKey: ["projects"] });
+          }}
         />
       )}
 
@@ -170,10 +172,10 @@ export function ProjectsClient({ initialProjects }: Props) {
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              disabled={deleteLoading}
+              disabled={deleteProject.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteLoading ? "삭제 중..." : "삭제"}
+              {deleteProject.isPending ? "삭제 중..." : "삭제"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

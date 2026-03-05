@@ -12,6 +12,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { ChevronRight, Send, Clock, User } from "lucide-react";
 import { IssueFormDialog } from "./IssueFormDialog";
 import { AttachmentSection } from "./AttachmentSection";
+import {
+  useUpdateIssueField,
+  useAddComment,
+  useAddDisciplineWork,
+  useUpdateDisciplineWork,
+  useDeleteDisciplineWork,
+} from "@/lib/hooks/use-issue-detail";
 
 type Member = { id: string; name: string; color: string };
 type BoardStatus = { id: string; name: string; color: string; isFinal?: boolean };
@@ -103,69 +110,27 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
   const [editOpen, setEditOpen] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [commentAuthor, setCommentAuthor] = useState("");
-  const [commentLoading, setCommentLoading] = useState(false);
-  const [updatingField, setUpdatingField] = useState<string | null>(null);
 
-  async function updateIssue(data: Record<string, unknown>) {
-    const field = Object.keys(data)[0];
-    setUpdatingField(field);
-    try {
-      await fetch(`/api/projects/${projectId}/issues/${issue.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      router.refresh();
-    } finally {
-      setUpdatingField(null);
-    }
-  }
+  const updateIssueField = useUpdateIssueField(projectId, issue.id);
+  const addComment = useAddComment(projectId, issue.id);
+  const addDisciplineWork = useAddDisciplineWork(projectId, issue.id);
+  const updateDisciplineWork = useUpdateDisciplineWork(projectId, issue.id);
+  const deleteDisciplineWork = useDeleteDisciplineWork(projectId, issue.id);
 
-  async function addDisciplineWork(disciplineId: string) {
-    await fetch(`/api/projects/${projectId}/issues/${issue.id}/discipline-works`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ disciplineId }),
-    });
-    router.refresh();
-  }
-
-  async function updateDisciplineWork(dwId: string, data: Record<string, unknown>) {
-    await fetch(`/api/projects/${projectId}/issues/${issue.id}/discipline-works/${dwId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    router.refresh();
-  }
-
-  async function deleteDisciplineWork(dwId: string) {
-    await fetch(`/api/projects/${projectId}/issues/${issue.id}/discipline-works/${dwId}`, {
-      method: "DELETE",
-    });
-    router.refresh();
-  }
-
-  async function submitComment() {
+  function handleSubmitComment() {
     if (!commentText.trim()) return;
-    setCommentLoading(true);
-    try {
-      await fetch(`/api/projects/${projectId}/issues/${issue.id}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authorName: commentAuthor || "익명", content: commentText }),
-      });
-      setCommentText("");
-      router.refresh();
-    } finally {
-      setCommentLoading(false);
-    }
+    addComment.mutate(
+      { authorName: commentAuthor || "익명", content: commentText },
+      { onSuccess: () => setCommentText("") }
+    );
   }
 
   const usedDisciplineIds = new Set(issue.disciplineWorks.map((dw) => dw.discipline.id));
   const availableDisciplines = disciplines.filter((d) => !usedDisciplineIds.has(d.id));
 
-  const parentOptions = issue.parent ? [{ id: issue.parent.id, title: issue.parent.title, type: issue.parent.type as "EPIC" | "STORY" | "TASK" }] : [];
+  const parentOptions = issue.parent
+    ? [{ id: issue.parent.id, title: issue.parent.title, type: issue.parent.type as "EPIC" | "STORY" | "TASK" }]
+    : [];
 
   return (
     <div className="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto">
@@ -254,7 +219,10 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium">직군 작업</h3>
                 {availableDisciplines.length > 0 && (
-                  <Select onValueChange={addDisciplineWork}>
+                  <Select
+                    onValueChange={(v) => addDisciplineWork.mutate(v)}
+                    disabled={addDisciplineWork.isPending}
+                  >
                     <SelectTrigger className="h-7 text-xs w-32">
                       <SelectValue placeholder="+ 직군 추가" />
                     </SelectTrigger>
@@ -280,7 +248,10 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
                       </span>
                       <Select
                         value={dw.assignee?.id ?? "none"}
-                        onValueChange={(v) => updateDisciplineWork(dw.id, { assigneeId: v === "none" ? null : v })}
+                        onValueChange={(v) =>
+                          updateDisciplineWork.mutate({ dwId: dw.id, data: { assigneeId: v === "none" ? null : v } })
+                        }
+                        disabled={updateDisciplineWork.isPending}
                       >
                         <SelectTrigger className="h-6 text-xs w-24 shrink-0">
                           <SelectValue placeholder="담당 없음" />
@@ -294,7 +265,10 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
                       </Select>
                       <Select
                         value={dw.status}
-                        onValueChange={(v) => updateDisciplineWork(dw.id, { status: v })}
+                        onValueChange={(v) =>
+                          updateDisciplineWork.mutate({ dwId: dw.id, data: { status: v } })
+                        }
+                        disabled={updateDisciplineWork.isPending}
                       >
                         <SelectTrigger className="h-6 text-xs w-24 shrink-0">
                           <SelectValue />
@@ -306,8 +280,11 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
                         </SelectContent>
                       </Select>
                       <Button
-                        variant="ghost" size="icon" className="h-6 w-6 ml-auto text-muted-foreground"
-                        onClick={() => deleteDisciplineWork(dw.id)}
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 ml-auto text-muted-foreground"
+                        onClick={() => deleteDisciplineWork.mutate(dw.id)}
+                        disabled={deleteDisciplineWork.isPending}
                       >
                         ×
                       </Button>
@@ -357,9 +334,13 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
                 className="text-sm"
               />
               <div className="flex justify-end">
-                <Button size="sm" onClick={submitComment} disabled={commentLoading || !commentText.trim()}>
+                <Button
+                  size="sm"
+                  onClick={handleSubmitComment}
+                  disabled={addComment.isPending || !commentText.trim()}
+                >
                   <Send size={12} className="mr-1" />
-                  {commentLoading ? "전송 중..." : "댓글 달기"}
+                  {addComment.isPending ? "전송 중..." : "댓글 달기"}
                 </Button>
               </div>
             </div>
@@ -396,8 +377,8 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
               <Label className="text-xs text-muted-foreground">상태</Label>
               <Select
                 value={issue.boardStatus?.id ?? ""}
-                onValueChange={(v) => updateIssue({ boardStatusId: v })}
-                disabled={updatingField === "boardStatusId"}
+                onValueChange={(v) => updateIssueField.mutate({ boardStatusId: v })}
+                disabled={updateIssueField.isPending}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="상태 없음" />
@@ -421,8 +402,8 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
             <Label className="text-xs text-muted-foreground">담당자</Label>
             <Select
               value={issue.assignee?.id ?? "none"}
-              onValueChange={(v) => updateIssue({ assigneeId: v === "none" ? null : v })}
-              disabled={updatingField === "assigneeId"}
+              onValueChange={(v) => updateIssueField.mutate({ assigneeId: v === "none" ? null : v })}
+              disabled={updateIssueField.isPending}
             >
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="담당자 없음" />
@@ -441,8 +422,8 @@ export function IssueDetailClient({ projectId, issue, members, boardStatuses, di
             <Label className="text-xs text-muted-foreground">우선순위</Label>
             <Select
               value={issue.priority}
-              onValueChange={(v) => updateIssue({ priority: v })}
-              disabled={updatingField === "priority"}
+              onValueChange={(v) => updateIssueField.mutate({ priority: v })}
+              disabled={updateIssueField.isPending}
             >
               <SelectTrigger className="mt-1">
                 <SelectValue />

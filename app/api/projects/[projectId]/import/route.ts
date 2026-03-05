@@ -97,10 +97,11 @@ export async function POST(request: Request, { params }: Params) {
         createdByTitle.set(row.title, issue.id);
         results.push({ success: true, title: row.title });
       } catch (err) {
+        console.error(`Import row error [${row.title}]:`, err);
         results.push({
           success: false,
           title: row.title,
-          error: err instanceof Error ? err.message : "알 수 없는 오류",
+          error: "이슈 생성에 실패했습니다.",
         });
       }
     }

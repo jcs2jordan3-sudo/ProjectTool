@@ -35,9 +35,10 @@ type Props = {
   issue: KanbanIssue;
   projectId: string;
   isDragOverlay?: boolean;
+  onIssueClick?: (issueId: string) => void;
 };
 
-export function KanbanCard({ issue, projectId, isDragOverlay }: Props) {
+export function KanbanCard({ issue, projectId, isDragOverlay, onIssueClick }: Props) {
   const router = useRouter();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: issue.id, data: { issue } });
@@ -66,7 +67,11 @@ export function KanbanCard({ issue, projectId, isDragOverlay }: Props) {
         // 드래그 중이 아닐 때만 이동
         if (!isDragging) {
           e.stopPropagation();
-          router.push(`/projects/${projectId}/issues/${issue.id}`);
+          if (onIssueClick) {
+            onIssueClick(issue.id);
+          } else {
+            router.push(`/projects/${projectId}/issues/${issue.id}`);
+          }
         }
       }}
     >
@@ -85,19 +90,22 @@ export function KanbanCard({ issue, projectId, isDragOverlay }: Props) {
       {/* 제목 */}
       <p className="text-sm leading-snug mb-2 line-clamp-2">{issue.title}</p>
 
-      {/* 직군 배지 (TASK) */}
+      {/* 직군 배지 + 진행도 바 (TASK) */}
       {issue.disciplineWorks.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {issue.disciplineWorks.map((dw) => (
-            <span
-              key={dw.id}
-              className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-              style={{ backgroundColor: dw.discipline.color + "20", color: dw.discipline.color }}
-              title={`${dw.discipline.name}: ${dw.status}`}
-            >
-              {dw.discipline.name[0]}{DW_ICON[dw.status]}
-            </span>
-          ))}
+        <div className="mb-2 space-y-1.5">
+          <div className="flex flex-wrap gap-1">
+            {issue.disciplineWorks.map((dw) => (
+              <span
+                key={dw.id}
+                className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                style={{ backgroundColor: dw.discipline.color + "20", color: dw.discipline.color }}
+                title={`${dw.discipline.name}: ${dw.status}`}
+              >
+                {dw.discipline.name[0]}{DW_ICON[dw.status]}
+              </span>
+            ))}
+          </div>
+          <ProgressBar disciplineWorks={issue.disciplineWorks} />
         </div>
       )}
 
@@ -126,6 +134,35 @@ export function KanbanCard({ issue, projectId, isDragOverlay }: Props) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// 담당자가 지정된 직군만 카운트하여 진행도 바 표시
+function ProgressBar({ disciplineWorks }: { disciplineWorks: DisciplineWork[] }) {
+  const assigned = disciplineWorks.filter((dw) => dw.discipline); // all have discipline
+  // For progress, we count all discipline works (assigned or not)
+  const total = disciplineWorks.length;
+  const done = disciplineWorks.filter((dw) => dw.status === "DONE").length;
+
+  if (total === 0) return null;
+
+  const percent = Math.round((done / total) * 100);
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div
+          className={cn(
+            "h-full rounded-full transition-all",
+            percent === 100 ? "bg-green-500" : percent > 0 ? "bg-primary" : "bg-muted"
+          )}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <span className="text-[9px] text-muted-foreground shrink-0">
+        {done}/{total}
+      </span>
     </div>
   );
 }

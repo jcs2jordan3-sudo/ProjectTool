@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { MemberFormDialog } from "./MemberFormDialog";
+import { useMembers, useDeleteMember } from "@/lib/hooks/use-members";
 
 type Member = {
   id: string;
@@ -40,31 +42,26 @@ type Props = {
 
 export function MembersClient({ initialMembers }: Props) {
   const router = useRouter();
-  const [members, setMembers] = useState<Member[]>(initialMembers);
+  const queryClient = useQueryClient();
+  const { data: members = initialMembers } = useMembers(initialMembers);
+  const deleteMember = useDeleteMember();
+
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Member | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/members");
-    if (res.ok) {
-      const data = await res.json();
-      setMembers(data);
-    }
-    router.refresh();
-  }, [router]);
 
   async function handleDelete() {
     if (!deleteTarget) return;
-    setDeleteLoading(true);
-    try {
-      await fetch(`/api/members/${deleteTarget.id}`, { method: "DELETE" });
-      setDeleteTarget(null);
-      await refresh();
-    } finally {
-      setDeleteLoading(false);
-    }
+    deleteMember.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        setDeleteTarget(null);
+        router.refresh();
+      },
+    });
+  }
+
+  function handleFormSuccess() {
+    queryClient.invalidateQueries({ queryKey: ["members"] });
   }
 
   return (
@@ -146,7 +143,7 @@ export function MembersClient({ initialMembers }: Props) {
       <MemberFormDialog
         open={addOpen}
         onOpenChange={setAddOpen}
-        onSuccess={refresh}
+        onSuccess={handleFormSuccess}
       />
 
       {/* 수정 다이얼로그 */}
@@ -161,7 +158,10 @@ export function MembersClient({ initialMembers }: Props) {
             color: editTarget.color,
             slackUserId: editTarget.slackUserId ?? "",
           }}
-          onSuccess={refresh}
+          onSuccess={() => {
+            setEditTarget(null);
+            handleFormSuccess();
+          }}
         />
       )}
 
@@ -179,10 +179,10 @@ export function MembersClient({ initialMembers }: Props) {
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              disabled={deleteLoading}
+              disabled={deleteMember.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteLoading ? "삭제 중..." : "삭제"}
+              {deleteMember.isPending ? "삭제 중..." : "삭제"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

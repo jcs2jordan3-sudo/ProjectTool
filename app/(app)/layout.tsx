@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/layout/Sidebar";
+import { QueryProvider } from "@/components/providers/QueryProvider";
 
 export default function AppLayout({
   children,
@@ -6,11 +7,13 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <Sidebar />
-      <main className="flex flex-1 flex-col overflow-hidden">
-        {children}
-      </main>
-    </div>
+    <QueryProvider>
+      <div className="flex h-screen overflow-hidden bg-background">
+        <Sidebar />
+        <main className="flex flex-1 flex-col overflow-hidden">
+          {children}
+        </main>
+      </div>
+    </QueryProvider>
   );
 }

@@ -11,6 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useCreateSprint, useUpdateSprint } from "@/lib/hooks/use-sprints";
+
+// ─── 타입 ────────────────────────────────────────────────────────────────────
 
 type SprintData = {
   id: string;
@@ -24,56 +27,63 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
-  sprint?: SprintData; // 수정 시
-  onSuccess: () => void;
+  sprint?: SprintData;
 };
+
+// ─── 유틸 ────────────────────────────────────────────────────────────────────
 
 function toInputDate(value: Date | string | null | undefined): string {
   if (!value) return "";
-  const d = new Date(value);
-  return d.toISOString().split("T")[0];
+  return new Date(value).toISOString().split("T")[0];
 }
 
-export function SprintFormDialog({ open, onOpenChange, projectId, sprint, onSuccess }: Props) {
+// ─── 컴포넌트 ────────────────────────────────────────────────────────────────
+
+export function SprintFormDialog({
+  open,
+  onOpenChange,
+  projectId,
+  sprint,
+}: Props) {
   const [name, setName] = useState(sprint?.name ?? "");
   const [goal, setGoal] = useState(sprint?.goal ?? "");
   const [startDate, setStartDate] = useState(toInputDate(sprint?.startDate));
   const [endDate, setEndDate] = useState(toInputDate(sprint?.endDate));
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleSubmit(e: React.FormEvent) {
+  const createSprint = useCreateSprint(projectId);
+  const updateSprint = useUpdateSprint(projectId);
+
+  const isPending = createSprint.isPending || updateSprint.isPending;
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
       setError("스프린트 이름을 입력하세요.");
       return;
     }
-    setLoading(true);
     setError("");
 
-    const url = sprint
-      ? `/api/projects/${projectId}/sprints/${sprint.id}`
-      : `/api/projects/${projectId}/sprints`;
-    const method = sprint ? "PATCH" : "POST";
+    const body = {
+      name: name.trim(),
+      goal: goal.trim() || null,
+      startDate: startDate || null,
+      endDate: endDate || null,
+    };
 
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: name.trim(),
-        goal: goal.trim() || null,
-        startDate: startDate || null,
-        endDate: endDate || null,
-      }),
-    });
-
-    setLoading(false);
-    if (res.ok) {
-      onOpenChange(false);
-      onSuccess();
+    if (sprint) {
+      updateSprint.mutate(
+        { sprintId: sprint.id, ...body },
+        {
+          onSuccess: () => onOpenChange(false),
+          onError: (err) => setError(err.message),
+        },
+      );
     } else {
-      const data = await res.json();
-      setError(data.error ?? "오류가 발생했습니다.");
+      createSprint.mutate(body, {
+        onSuccess: () => onOpenChange(false),
+        onError: (err) => setError(err.message),
+      });
     }
   }
 
@@ -81,7 +91,9 @@ export function SprintFormDialog({ open, onOpenChange, projectId, sprint, onSucc
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{sprint ? "스프린트 수정" : "스프린트 생성"}</DialogTitle>
+          <DialogTitle>
+            {sprint ? "스프린트 수정" : "스프린트 생성"}
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
@@ -125,11 +137,15 @@ export function SprintFormDialog({ open, onOpenChange, projectId, sprint, onSucc
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+            >
               취소
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "저장 중..." : sprint ? "저장" : "생성"}
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "저장 중..." : sprint ? "저장" : "생성"}
             </Button>
           </div>
         </form>

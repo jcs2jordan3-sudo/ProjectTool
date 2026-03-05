@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Search, X, LayoutList, ChevronRight, MoreHorizontal, Pencil, Trash2,
 } from "lucide-react";
@@ -32,6 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
 import { IssueTree } from "./IssueTree";
 import { IssueFormDialog } from "./IssueFormDialog";
 
@@ -74,7 +76,7 @@ function flattenIssues(issues: Issue[]): Issue[] {
   const result: Issue[] = [];
   function walk(issue: Issue) {
     result.push(issue);
-    for (const child of issue.children) walk(child);
+    for (const child of issue.children ?? []) walk(child);
   }
   for (const issue of issues) walk(issue);
   return result;
@@ -102,7 +104,7 @@ function filterTree(
   predicate: (i: Issue) => boolean
 ): Issue[] {
   return issues.reduce<Issue[]>((acc, issue) => {
-    const filteredChildren = filterTree(issue.children, predicate);
+    const filteredChildren = filterTree(issue.children ?? [], predicate);
     if (predicate(issue) || filteredChildren.length > 0) {
       acc.push({ ...issue, children: filteredChildren });
     }
@@ -165,11 +167,14 @@ function FlatRow({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  async function handleDelete() {
-    await fetch(`/api/projects/${projectId}/issues/${issue.id}`, { method: "DELETE" });
-    setDeleteOpen(false);
-    onRefresh();
-  }
+  const deleteIssueMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<void>(`/api/projects/${projectId}/issues/${issue.id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      setDeleteOpen(false);
+      onRefresh();
+    },
+  });
 
   const parentOptions = allFlat.map((i) => ({ id: i.id, title: i.title, type: i.type }));
 
@@ -179,71 +184,79 @@ function FlatRow({
         className="flex items-center gap-2 px-3 py-2 hover:bg-accent/30 rounded group cursor-pointer"
         onClick={() => router.push(`/projects/${projectId}/issues/${issue.id}`)}
       >
-        <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0", TYPE_STYLE[issue.type])}>
+        <span className={cn("w-14 text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 text-center", TYPE_STYLE[issue.type])}>
           {issue.type}
         </span>
         <span className="flex-1 text-sm truncate">{issue.title}</span>
 
-        {issue.disciplineWorks.length > 0 && (
-          <div className="flex gap-0.5 shrink-0">
-            {issue.disciplineWorks.slice(0, 4).map((dw) => (
-              <span
-                key={dw.id}
-                className="text-[10px] px-1 py-0.5 rounded"
-                style={{ backgroundColor: dw.discipline.color + "20", color: dw.discipline.color }}
-                title={`${dw.discipline.name}: ${dw.status}`}
-              >
-                {dw.discipline.name[0]}{DW_ICON[dw.status]}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="w-24 shrink-0 flex justify-center gap-0.5">
+          {issue.disciplineWorks.slice(0, 4).map((dw) => (
+            <span
+              key={dw.id}
+              className="text-[10px] px-1 py-0.5 rounded"
+              style={{ backgroundColor: dw.discipline.color + "20", color: dw.discipline.color }}
+              title={`${dw.discipline.name}: ${dw.status}`}
+            >
+              {dw.discipline.name[0]}{DW_ICON[dw.status]}
+            </span>
+          ))}
+        </div>
 
-        {issue.boardStatus && (
-          <span
-            className="text-[10px] px-1.5 py-0.5 rounded shrink-0"
-            style={{ backgroundColor: issue.boardStatus.color + "20", color: issue.boardStatus.color }}
-          >
-            {issue.boardStatus.name}
-          </span>
-        )}
+        <div className="w-20 shrink-0 flex justify-center">
+          {issue.boardStatus && (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: issue.boardStatus.color + "20", color: issue.boardStatus.color }}
+            >
+              {issue.boardStatus.name}
+            </span>
+          )}
+        </div>
 
-        <span className={cn("w-2 h-2 rounded-full shrink-0", PRIORITY_DOT[issue.priority] ?? "bg-slate-300")}
-          title={PRIORITY_LABELS[issue.priority]} />
+        <div className="w-4 shrink-0 flex justify-center">
+          <span className={cn("w-2 h-2 rounded-full", PRIORITY_DOT[issue.priority] ?? "bg-slate-300")}
+            title={PRIORITY_LABELS[issue.priority]} />
+        </div>
 
-        {issue.dueDate && (
-          <span className={cn("text-[10px] shrink-0", new Date(issue.dueDate) < new Date() ? "text-red-500" : "text-muted-foreground")}>
-            {new Date(issue.dueDate).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}
-          </span>
-        )}
+        <div className="w-16 shrink-0 text-right">
+          {issue.dueDate && (
+            <span className={cn("text-[10px]", new Date(issue.dueDate) < new Date() ? "text-red-500" : "text-muted-foreground")}>
+              {new Date(issue.dueDate).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}
+            </span>
+          )}
+        </div>
 
-        {issue.assignee ? (
-          <div
-            className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0"
-            style={{ backgroundColor: issue.assignee.color }}
-            title={issue.assignee.name}
-          >
-            {issue.assignee.name[0]}
-          </div>
-        ) : (
-          <div className="w-5 h-5 shrink-0" />
-        )}
+        <div className="w-6 shrink-0 flex justify-center">
+          {issue.assignee ? (
+            <div
+              className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
+              style={{ backgroundColor: issue.assignee.color }}
+              title={issue.assignee.name}
+            >
+              {issue.assignee.name[0]}
+            </div>
+          ) : (
+            <div className="w-5 h-5" />
+          )}
+        </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0">
-              <MoreHorizontal size={12} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditOpen(true); }}>
-              <Pencil size={12} className="mr-2" />수정
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteOpen(true); }}>
-              <Trash2 size={12} className="mr-2" />삭제
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="w-6 shrink-0 flex justify-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
+                <MoreHorizontal size={12} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditOpen(true); }}>
+                <Pencil size={12} className="mr-2" />수정
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive" onClick={(e) => { e.stopPropagation(); setDeleteOpen(true); }}>
+                <Trash2 size={12} className="mr-2" />삭제
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {editOpen && (
@@ -274,8 +287,12 @@ function FlatRow({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              삭제
+            <AlertDialogAction
+              onClick={() => deleteIssueMutation.mutate()}
+              disabled={deleteIssueMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteIssueMutation.isPending ? "삭제 중..." : "삭제"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -295,7 +312,7 @@ const SORT_OPTIONS = [
 
 export function IssuesPageClient({ projectId, initialIssues, members, boardStatuses }: Props) {
   const router = useRouter();
-  const [issues, setIssues] = useState<Issue[]>(initialIssues);
+  const issues = initialIssues;
   const [viewMode, setViewMode] = useState<"tree" | "flat">("tree");
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("default");
@@ -334,7 +351,6 @@ export function IssuesPageClient({ projectId, initialIssues, members, boardStatu
     return sortBy !== "default" ? sortFlat(base, sortBy) : base;
   }, [allFlat, search, filterType, filterAssignee, filterPriority, filterStatus, sortBy]);
 
-  const activeViewIssues = viewMode === "tree" ? filteredTree : filteredFlat;
   const parentOptions = allFlat.map((i) => ({ id: i.id, title: i.title, type: i.type }));
 
   function clearFilters() {
@@ -498,11 +514,11 @@ export function IssuesPageClient({ projectId, initialIssues, members, boardStatu
           <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 text-xs text-muted-foreground font-medium">
             <span className="w-14 shrink-0">타입</span>
             <span className="flex-1">제목</span>
-            <span className="shrink-0">직군</span>
-            <span className="w-16 text-center shrink-0">상태</span>
+            <span className="w-24 text-center shrink-0">직군</span>
+            <span className="w-20 text-center shrink-0">상태</span>
             <span className="w-4 shrink-0" />
-            <span className="w-12 text-right shrink-0">마감일</span>
-            <span className="w-5 shrink-0" />
+            <span className="w-16 text-right shrink-0">마감일</span>
+            <span className="w-6 text-center shrink-0">담당</span>
             <span className="w-6 shrink-0" />
           </div>
 

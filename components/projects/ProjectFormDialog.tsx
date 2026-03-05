@@ -2,17 +2,27 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { apiFetch, ApiError } from "@/lib/api";
 
 type ProjectFormData = {
   name: string;
   description: string;
   slackWebhook: string;
 };
+
+type ProjectPayload = {
+  name: string;
+  description: string | null;
+  slackWebhook: string | null;
+};
+
+type ProjectResponse = { id: string };
 
 type Props = {
   open: boolean;
@@ -30,47 +40,44 @@ export function ProjectFormDialog({ open, onOpenChange, initial, onSuccess }: Pr
     slackWebhook: initial?.slackWebhook ?? "",
   });
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const update = (field: keyof ProjectFormData, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    const payload = {
-      name: form.name,
-      description: form.description || null,
-      slackWebhook: form.slackWebhook || null,
-    };
-
-    try {
+  const mutation = useMutation({
+    mutationFn: (payload: ProjectPayload) => {
       const url = isEdit ? `/api/projects/${initial!.id}` : "/api/projects";
       const method = isEdit ? "PATCH" : "POST";
-      const res = await fetch(url, {
+      return apiFetch<ProjectResponse>(url, {
         method,
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error ?? "오류가 발생했습니다.");
-        return;
-      }
-
-      const project = await res.json();
+    },
+    onSuccess: (project) => {
       onOpenChange(false);
       if (onSuccess) {
         onSuccess(project.id);
       } else {
         router.refresh();
       }
-    } finally {
-      setLoading(false);
-    }
+    },
+    onError: (err: unknown) => {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("오류가 발생했습니다.");
+      }
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    mutation.mutate({
+      name: form.name,
+      description: form.description || null,
+      slackWebhook: form.slackWebhook || null,
+    });
   }
 
   return (
@@ -121,8 +128,8 @@ export function ProjectFormDialog({ open, onOpenChange, initial, onSuccess }: Pr
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               취소
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "저장 중..." : isEdit ? "수정" : "만들기"}
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? "저장 중..." : isEdit ? "수정" : "만들기"}
             </Button>
           </div>
         </form>

@@ -6,12 +6,15 @@ import type { KanbanIssue } from "./KanbanCard";
 type BoardStatus = { id: string; name: string; color: string; isFinal: boolean; order: number };
 type Member = { id: string; name: string; color: string };
 
+type ParentOption = { id: string; title: string; type: "EPIC" | "STORY" | "TASK" };
+
 type Props = {
   projectId: string;
   statuses: BoardStatus[];
   initialIssues: KanbanIssue[];
   members: Member[];
   allStatuses: BoardStatus[];
+  parentOptions: ParentOption[];
 };
 
 // dnd-kit은 SSR에서 aria-describedby ID가 달라 hydration 오류 발생 → ssr: false

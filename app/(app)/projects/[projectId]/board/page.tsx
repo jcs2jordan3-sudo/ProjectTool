@@ -7,7 +7,7 @@ type Props = { params: Promise<{ projectId: string }> };
 export default async function BoardPage({ params }: Props) {
   const { projectId } = await params;
 
-  const [project, statuses, issues, members] = await Promise.all([
+  const [project, statuses, issues, members, parentCandidates] = await Promise.all([
     db.project.findUnique({ where: { id: projectId }, select: { id: true, name: true } }),
     db.boardStatus.findMany({ where: { projectId }, orderBy: { order: "asc" } }),
     db.issue.findMany({
@@ -30,6 +30,11 @@ export default async function BoardPage({ params }: Props) {
       where: { projectId },
       include: { member: { select: { id: true, name: true, color: true } } },
     }),
+    db.issue.findMany({
+      where: { projectId, type: { in: ["EPIC", "STORY"] } },
+      select: { id: true, title: true, type: true },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
 
   if (!project) notFound();
@@ -50,6 +55,7 @@ export default async function BoardPage({ params }: Props) {
         initialIssues={issues}
         members={members.map((pm) => pm.member)}
         allStatuses={statuses}
+        parentOptions={parentCandidates as { id: string; title: string; type: "EPIC" | "STORY" | "TASK" }[]}
       />
     </div>
   );

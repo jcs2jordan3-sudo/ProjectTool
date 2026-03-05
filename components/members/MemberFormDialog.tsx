@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { apiFetch, ApiError } from "@/lib/api";
 
 const PRESET_COLORS = [
   "#6366f1", "#8b5cf6", "#ec4899", "#ef4444",
@@ -17,6 +19,13 @@ type MemberFormData = {
   email: string;
   color: string;
   slackUserId: string;
+};
+
+type MemberPayload = {
+  name: string;
+  email: string;
+  color: string;
+  slackUserId: string | null;
 };
 
 type Props = {
@@ -35,43 +44,41 @@ export function MemberFormDialog({ open, onOpenChange, initial, onSuccess }: Pro
     slackUserId: initial?.slackUserId ?? "",
   });
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const update = (field: keyof MemberFormData, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  async function handleSubmit(e: React.FormEvent) {
+  const mutation = useMutation({
+    mutationFn: (payload: MemberPayload) => {
+      const url = isEdit ? `/api/members/${initial!.id}` : "/api/members";
+      const method = isEdit ? "PATCH" : "POST";
+      return apiFetch<unknown>(url, {
+        method,
+        body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: () => {
+      onSuccess();
+      onOpenChange(false);
+    },
+    onError: (err: unknown) => {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("오류가 발생했습니다.");
+      }
+    },
+  });
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setLoading(true);
-
-    const payload = {
+    mutation.mutate({
       name: form.name,
       email: form.email,
       color: form.color,
       slackUserId: form.slackUserId || null,
-    };
-
-    try {
-      const url = isEdit ? `/api/members/${initial!.id}` : "/api/members";
-      const method = isEdit ? "PATCH" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error ?? "오류가 발생했습니다.");
-        return;
-      }
-
-      onSuccess();
-      onOpenChange(false);
-    } finally {
-      setLoading(false);
-    }
+    });
   }
 
   return (
@@ -148,8 +155,8 @@ export function MemberFormDialog({ open, onOpenChange, initial, onSuccess }: Pro
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               취소
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "저장 중..." : isEdit ? "수정" : "추가"}
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending ? "저장 중..." : isEdit ? "수정" : "추가"}
             </Button>
           </div>
         </form>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { supabase, STORAGE_BUCKET } from "@/lib/supabase";
+import { supabaseServer, STORAGE_BUCKET } from "@/lib/supabase-server";
 
 type Params = { params: Promise<{ projectId: string; issueId: string }> };
 
@@ -30,7 +30,7 @@ export async function POST(request: Request, { params }: Params) {
     const storagePath = `${projectId}/${issueId}/${Date.now()}_${safeFileName}`;
 
     const arrayBuffer = await file.arrayBuffer();
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabaseServer.storage
       .from(STORAGE_BUCKET)
       .upload(storagePath, arrayBuffer, {
         contentType: file.type || "application/octet-stream",
@@ -39,11 +39,11 @@ export async function POST(request: Request, { params }: Params) {
 
     if (uploadError) {
       console.error("Storage upload error:", uploadError);
-      return NextResponse.json({ error: `파일 업로드 실패: ${uploadError.message}` }, { status: 500 });
+      return NextResponse.json({ error: "파일 업로드에 실패했습니다." }, { status: 500 });
     }
 
     // Public URL 생성
-    const { data: urlData } = supabase.storage
+    const { data: urlData } = supabaseServer.storage
       .from(STORAGE_BUCKET)
       .getPublicUrl(storagePath);
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, ChevronDown, Plus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { IssueFormDialog } from "./IssueFormDialog";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
 
 type IssueType = "EPIC" | "STORY" | "TASK";
 type Priority = "URGENT" | "HIGH" | "MEDIUM" | "LOW";
@@ -86,129 +88,136 @@ function IssueRow({
   onRefresh: () => void;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const hasChildren = issue.children.length > 0;
 
-  async function handleDelete() {
-    setDeleteLoading(true);
-    try {
-      await fetch(`/api/projects/${projectId}/issues/${issue.id}`, { method: "DELETE" });
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<void>(`/api/projects/${projectId}/issues/${issue.id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "issues"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "kanbanIssues"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "sprints"] });
+      queryClient.invalidateQueries({ queryKey: ["projects", projectId, "backlogIssues"] });
+      router.refresh();
       setDeleteTarget(false);
       onRefresh();
-    } finally {
-      setDeleteLoading(false);
-    }
-  }
+    },
+  });
 
   const parentOptions = allIssues.map((i) => ({ id: i.id, title: i.title, type: i.type }));
 
   return (
     <>
       <div
-        className="flex items-center gap-1 py-1.5 px-2 hover:bg-accent/30 rounded group cursor-pointer"
+        className="flex items-center gap-2 py-1.5 px-2 hover:bg-accent/30 rounded group cursor-pointer"
         style={{ paddingLeft: `${8 + depth * 20}px` }}
         onClick={() => router.push(`/projects/${projectId}/issues/${issue.id}`)}
       >
-        {/* 펼치기/접기 */}
-        <button
-          className="w-4 h-4 flex items-center justify-center text-muted-foreground shrink-0"
-          onClick={(e) => { e.stopPropagation(); if (hasChildren) setExpanded(!expanded); }}
-        >
-          {hasChildren ? (
-            expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />
-          ) : (
-            <span className="w-3 h-3 rounded-sm border border-muted inline-block" />
-          )}
-        </button>
-
-        {/* 타입 배지 */}
-        {issue.type === "EPIC" && (
-          <span
-            className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white shrink-0"
-            style={{ backgroundColor: issue.epicColor ?? "#6366f1" }}
+        {/* 펼치기/접기 + 타입 배지 + 제목 */}
+        <div className="flex items-center gap-1 flex-1 min-w-0">
+          <button
+            className="w-4 h-4 flex items-center justify-center text-muted-foreground shrink-0"
+            onClick={(e) => { e.stopPropagation(); if (hasChildren) setExpanded(!expanded); }}
           >
-            EPIC
-          </span>
-        )}
-        {issue.type === "STORY" && (
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 shrink-0">
-            STORY
-          </span>
-        )}
-        {issue.type === "TASK" && (
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
-            TASK
-          </span>
-        )}
+            {hasChildren ? (
+              expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />
+            ) : (
+              <span className="w-3 h-3 rounded-sm border border-muted inline-block" />
+            )}
+          </button>
 
-        {/* 제목 */}
-        <span className="flex-1 text-sm truncate">{issue.title}</span>
+          {issue.type === "EPIC" && (
+            <span
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white shrink-0"
+              style={{ backgroundColor: issue.epicColor ?? "#6366f1" }}
+            >
+              EPIC
+            </span>
+          )}
+          {issue.type === "STORY" && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 shrink-0">
+              STORY
+            </span>
+          )}
+          {issue.type === "TASK" && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 shrink-0">
+              TASK
+            </span>
+          )}
+
+          <span className="text-sm truncate">{issue.title}</span>
+        </div>
 
         {/* 직군 배지 */}
-        {issue.disciplineWorks.length > 0 && (
-          <div className="flex gap-1 shrink-0">
-            {issue.disciplineWorks.slice(0, 4).map((dw) => (
-              <span
-                key={dw.id}
-                className="text-[10px] px-1 py-0.5 rounded"
-                style={{ backgroundColor: dw.discipline.color + "20", color: dw.discipline.color }}
-                title={`${dw.discipline.name}: ${dw.status}`}
-              >
-                {dw.discipline.name[0]}{DW_ICON[dw.status]}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="w-24 shrink-0 flex justify-center gap-0.5">
+          {issue.disciplineWorks.slice(0, 4).map((dw) => (
+            <span
+              key={dw.id}
+              className="text-[10px] px-1 py-0.5 rounded"
+              style={{ backgroundColor: dw.discipline.color + "20", color: dw.discipline.color }}
+              title={`${dw.discipline.name}: ${dw.status}`}
+            >
+              {dw.discipline.name[0]}{DW_ICON[dw.status]}
+            </span>
+          ))}
+        </div>
 
         {/* 상태 */}
-        {issue.boardStatus && (
-          <span
-            className="text-[10px] px-1.5 py-0.5 rounded shrink-0"
-            style={{ backgroundColor: issue.boardStatus.color + "20", color: issue.boardStatus.color }}
-          >
-            {issue.boardStatus.name}
-          </span>
-        )}
+        <div className="w-20 shrink-0 flex justify-center">
+          {issue.boardStatus && (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: issue.boardStatus.color + "20", color: issue.boardStatus.color }}
+            >
+              {issue.boardStatus.name}
+            </span>
+          )}
+        </div>
 
         {/* 우선순위 */}
-        <span className={cn("text-[10px] shrink-0 font-medium", PRIORITY_COLORS[issue.priority])}>
+        <span className={cn("w-14 text-center text-[10px] shrink-0 font-medium", PRIORITY_COLORS[issue.priority])}>
           {PRIORITY_LABELS[issue.priority]}
         </span>
 
         {/* 담당자 아바타 */}
-        {issue.assignee && (
-          <div
-            className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-semibold shrink-0"
-            style={{ backgroundColor: issue.assignee.color }}
-            title={issue.assignee.name}
-          >
-            {issue.assignee.name[0]}
-          </div>
-        )}
+        <div className="w-6 shrink-0 flex justify-center">
+          {issue.assignee && (
+            <div
+              className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-semibold"
+              style={{ backgroundColor: issue.assignee.color }}
+              title={issue.assignee.name}
+            >
+              {issue.assignee.name[0]}
+            </div>
+          )}
+        </div>
 
         {/* 액션 */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0">
-              <MoreHorizontal size={12} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditOpen(true); }}>
-              <Pencil size={12} className="mr-2" />수정
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={(e) => { e.stopPropagation(); setDeleteTarget(true); }}
-            >
-              <Trash2 size={12} className="mr-2" />삭제
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="w-6 shrink-0 flex justify-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
+                <MoreHorizontal size={12} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditOpen(true); }}>
+                <Pencil size={12} className="mr-2" />수정
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={(e) => { e.stopPropagation(); setDeleteTarget(true); }}
+              >
+                <Trash2 size={12} className="mr-2" />삭제
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* 하위 이슈 */}
@@ -258,11 +267,11 @@ function IssueRow({
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleteLoading}
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteLoading ? "삭제 중..." : "삭제"}
+              {deleteMutation.isPending ? "삭제 중..." : "삭제"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -292,11 +301,11 @@ export function IssueTree({ projectId, issues, members, boardStatuses, onRefresh
 
       <div className="border rounded-lg">
         {/* 헤더 */}
-        <div className="flex items-center gap-1 px-2 py-2 border-b bg-muted/30 text-xs text-muted-foreground font-medium">
-          <span className="w-4 shrink-0" />
-          <span className="flex-1 pl-1">제목</span>
-          <span className="w-16 text-center shrink-0">상태</span>
-          <span className="w-12 text-center shrink-0">우선순위</span>
+        <div className="flex items-center gap-2 px-2 py-2 border-b bg-muted/30 text-xs text-muted-foreground font-medium">
+          <span className="flex-1 pl-6">제목</span>
+          <span className="w-24 text-center shrink-0">직군</span>
+          <span className="w-20 text-center shrink-0">상태</span>
+          <span className="w-14 text-center shrink-0">우선순위</span>
           <span className="w-6 shrink-0" />
           <span className="w-6 shrink-0" />
         </div>
